@@ -2,7 +2,7 @@
 #         eBPF / XDP Minimalist Firewall Configuration
 # ==========================================================
 
-interface: incusbr-protected
+interface: incus-protect
 
 global:
   log_level: info

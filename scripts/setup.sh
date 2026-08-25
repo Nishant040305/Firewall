@@ -20,9 +20,13 @@ sudo apt-get install -y \
     netcat-openbsd \
     python3 \
     git \
-    incus \
-    incus-client \
     linux-headers-"$(uname -r)"
+
+# Install Incus (from backports if on Debian Bookworm, otherwise standard repo)
+if ! sudo apt-get install -y incus incus-client 2>/dev/null; then
+    echo "[*] Attempting to install Incus from bookworm-backports..."
+    sudo apt-get install -y -t bookworm-backports incus incus-client qemu-system-x86
+fi
 
 # Enable IP forwarding on the host
 sudo sysctl -w net.ipv4.ip_forward=1

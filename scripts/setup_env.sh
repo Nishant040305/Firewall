@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 # Sets up Incus networks and containers for firewall testing.
 # Usage: ./setup_env.sh [IMAGE_NAME]
-# Default: images:ubuntu/24.04 (e.g. images:debian/12, images:fedora/40, images:alpine/3.20)
+# Default: images:debian/12 (e.g. images:ubuntu/24.04, images:fedora/40, images:alpine/3.20)
 set -euo pipefail
 
-IMAGE="${1:-images:ubuntu/24.04}"
+IMAGE="${1:-images:debian/12}"
 echo "[+] Using container image: $IMAGE"
 
 echo "[+] Creating Incus virtual networks..."
-incus network create incusbr-mgmt ipv4.address=10.10.99.1/24 ipv4.nat=true || true
-incus network create incusbr-untrusted ipv4.address=10.10.1.1/24 ipv4.nat=false || true
-incus network create incusbr-protected ipv4.address=10.10.2.1/24 ipv4.nat=false || true
+incus network create incus-mgmt ipv4.address=10.10.99.1/24 ipv4.nat=true || true
+incus network create incus-untrust ipv4.address=10.10.1.1/24 ipv4.nat=false || true
+incus network create incus-protect ipv4.address=10.10.2.1/24 ipv4.nat=false || true
 
 echo "[+] Launching containers..."
 # Untrusted network (Client & Attacker)
-incus init "$IMAGE" attacker --network incusbr-untrusted || true
+incus init "$IMAGE" attacker --network incus-untrust || true
 incus config device set attacker eth0 ipv4.address 10.10.1.10 || true
 incus start attacker || true
 
-incus init "$IMAGE" client --network incusbr-untrusted || true
+incus init "$IMAGE" client --network incus-untrust || true
 incus config device set client eth0 ipv4.address 10.10.1.20 || true
 incus start client || true
 
 # Protected network (Server)
-incus init "$IMAGE" webserver --network incusbr-protected || true
+incus init "$IMAGE" webserver --network incus-protect || true
 incus config device set webserver eth0 ipv4.address 10.10.2.10 || true
 incus start webserver || true
 
 # Management network (Admin workstation)
-incus init "$IMAGE" admin --network incusbr-mgmt || true
+incus init "$IMAGE" admin --network incus-mgmt || true
 incus config device set admin eth0 ipv4.address 10.10.99.10 || true
 incus start admin || true
 

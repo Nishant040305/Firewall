@@ -8,7 +8,7 @@ for c in attacker client webserver admin; do
 done
 
 echo "[+] Deleting virtual networks..."
-for net in incusbr-untrusted incusbr-protected incusbr-mgmt; do
+for net in incus-untrust incus-protect incus-mgmt incusbr-mgmt; do
     incus network delete "$net" 2>/dev/null || true
 done
 
