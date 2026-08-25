@@ -1,0 +1,11 @@
+# ==========================================================
+#         eBPF / XDP Minimalist Firewall Configuration
+# ==========================================================
+
+interface: incusbr-protected
+
+global:
+  log_level: info
+  stats_interval_sec: 1
+  ringbuf_poll_timeout_ms: 100
+  default_policy: pass
