@@ -19,7 +19,9 @@ static int ringbuf_sample_handler(void *ctx, void *data, size_t data_sz)
         char src[32], dst[32];
         ip_to_str(evt->src_ip, src, sizeof(src));
         ip_to_str(evt->dst_ip, dst, sizeof(dst));
-        printf("[PACKET] Proto %u | %s -> %s (%u bytes)\n", evt->proto, src, dst, evt->pkt_len);
+        const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
+                              (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+        printf("[PACKET] %s | Proto %u | %s -> %s (%u bytes)\n", dir_str, evt->proto, src, dst, evt->pkt_len);
     }
     return 0;
 }
@@ -65,8 +67,10 @@ void event_bus_collect_stats(struct event_bus *bus)
         }
     }
 
-    printf("\n[STATS] Total: %llu | TCP: %llu | UDP: %llu | ICMP: %llu | Other: %llu\n",
+    printf("\n[STATS] Total: %llu (IN: %llu, OUT: %llu) | TCP: %llu | UDP: %llu | ICMP: %llu | Other: %llu\n",
            (unsigned long long)totals[STAT_TOTAL_PACKETS],
+           (unsigned long long)totals[STAT_INGRESS_PACKETS],
+           (unsigned long long)totals[STAT_EGRESS_PACKETS],
            (unsigned long long)totals[STAT_TCP_PACKETS],
            (unsigned long long)totals[STAT_UDP_PACKETS],
            (unsigned long long)totals[STAT_ICMP_PACKETS],

@@ -1,10 +1,12 @@
 # ==========================================================
-#         eBPF / XDP Minimalist Firewall Configuration
+#         eBPF / Hybrid (XDP + TC) Firewall Configuration
 # ==========================================================
 
-interface: incus-protect
+interface: eth0
 
 global:
+  direction: both          # in (ingress), out (egress), or both (bidirectional)
+  mode: hybrid             # hybrid (XDP for Ingress + TC for Egress), tc, or xdp
   log_level: info
   stats_interval_sec: 1
   ringbuf_poll_timeout_ms: 100

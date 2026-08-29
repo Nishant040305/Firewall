@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <time.h>
 #include "firewall_ctx.h"
@@ -25,8 +26,28 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     if (access(cfg_file, F_OK) == 0) {
         config_load_file(cfg_file, &ctx->config);
     }
+
+    /* Apply CLI overrides */
     if (ctx->opts.iface) {
         strncpy(ctx->config.interface, ctx->opts.iface, sizeof(ctx->config.interface) - 1);
+    }
+    if (ctx->opts.direction) {
+        if (strcasecmp(ctx->opts.direction, "in") == 0 || strcasecmp(ctx->opts.direction, "ingress") == 0) {
+            ctx->config.direction = TRAFFIC_DIR_INGRESS;
+        } else if (strcasecmp(ctx->opts.direction, "out") == 0 || strcasecmp(ctx->opts.direction, "egress") == 0) {
+            ctx->config.direction = TRAFFIC_DIR_EGRESS;
+        } else if (strcasecmp(ctx->opts.direction, "both") == 0 || strcasecmp(ctx->opts.direction, "all") == 0) {
+            ctx->config.direction = TRAFFIC_DIR_BOTH;
+        }
+    }
+    if (ctx->opts.mode) {
+        if (strcasecmp(ctx->opts.mode, "hybrid") == 0 || strcasecmp(ctx->opts.mode, "xdp+tc") == 0 || strcasecmp(ctx->opts.mode, "xdp_tc") == 0) {
+            ctx->config.mode = ATTACH_MODE_HYBRID;
+        } else if (strcasecmp(ctx->opts.mode, "xdp") == 0) {
+            ctx->config.mode = ATTACH_MODE_XDP;
+        } else if (strcasecmp(ctx->opts.mode, "tc") == 0) {
+            ctx->config.mode = ATTACH_MODE_TC;
+        }
     }
 
     if (config_validate(&ctx->config) < 0) {
@@ -36,9 +57,9 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     
     config_dump(&ctx->config);
 
-    /* 4. Load BPF Object & Attach XDP Hook */
+    /* 4. Load BPF Object & Attach Hook (TC or XDP) */
     const char *bpf_obj = "build/firewall.bpf.o";
-    if (bpf_loader_init(&ctx->loader, bpf_obj, ctx->config.interface) < 0) {
+    if (bpf_loader_init(&ctx->loader, bpf_obj, &ctx->config) < 0) {
         return -1;
     }
 
@@ -52,11 +73,14 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
 
 int firewall_ctx_run(struct firewall_ctx *ctx)
 {
-    printf("\n[*] Capturing and printing 5-tuples on '%s' (Press Ctrl+C to stop)...\n\n", ctx->config.interface);
+    printf("\n[*] Monitoring %s traffic on '%s' via %s (Press Ctrl+C to stop)...\n\n",
+           direction_to_str(ctx->config.direction),
+           ctx->config.interface,
+           mode_to_str(ctx->loader.mode));
 
     time_t last_stats = time(NULL);
     while (ctx->running) {
-        /* Poll and print incoming 5-tuple events from RingBuffer */
+        /* Poll and print 5-tuple events from RingBuffer */
         event_bus_poll(&ctx->bus, ctx->config.global.ringbuf_poll_timeout_ms);
 
         /* Periodic stats printing */

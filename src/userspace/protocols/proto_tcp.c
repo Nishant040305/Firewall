@@ -11,7 +11,11 @@ static void tcp_format_event(const struct packet_event *evt, char *buf, size_t l
     ip_to_str(evt->src_ip, src, sizeof(src));
     ip_to_str(evt->dst_ip, dst, sizeof(dst));
 
-    snprintf(buf, len, "[PACKET] TCP  | %s:%-5u -> %s:%-5u (%u bytes)",
+    const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
+                          (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+
+    snprintf(buf, len, "[PACKET] %s | TCP  | %s:%-5u -> %s:%-5u (%u bytes)",
+             dir_str,
              src, ntohs(evt->src_port),
              dst, ntohs(evt->dst_port),
              evt->pkt_len);

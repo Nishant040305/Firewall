@@ -1,11 +1,11 @@
 #ifndef __CORE_CLI_H__
 #define __CORE_CLI_H__
 
-// This can be extended to server configs , rules, stats, etc
 struct firewall_options {
     const char *iface;
     const char *config_path;
-
+    const char *direction;  /* "in", "out", "both" */
+    const char *mode;       /* "tc", "xdp" */
 };
 
 /* Parse command-line arguments into options struct */

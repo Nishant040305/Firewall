@@ -11,7 +11,11 @@ static void icmp_format_event(const struct packet_event *evt, char *buf, size_t 
     ip_to_str(evt->src_ip, src, sizeof(src));
     ip_to_str(evt->dst_ip, dst, sizeof(dst));
 
-    snprintf(buf, len, "[PACKET] ICMP | %s -> %s (%u bytes)",
+    const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
+                          (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+
+    snprintf(buf, len, "[PACKET] %s | ICMP | %s -> %s (%u bytes)",
+             dir_str,
              src, dst, evt->pkt_len);
 }
 

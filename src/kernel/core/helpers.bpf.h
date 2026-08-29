@@ -31,9 +31,9 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
     evt->src_port = pkt->src_port;
     evt->dst_port = pkt->dst_port;
     evt->proto = pkt->proto;
+    evt->direction = pkt->direction;
     evt->pad[0] = 0;
     evt->pad[1] = 0;
-    evt->pad[2] = 0;
     evt->pkt_len = pkt->pkt_len;
 
     bpf_ringbuf_submit(evt, 0);

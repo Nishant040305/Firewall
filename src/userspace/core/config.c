@@ -1,18 +1,40 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "config.h"
+
+const char *direction_to_str(enum traffic_direction dir)
+{
+    switch (dir) {
+    case TRAFFIC_DIR_INGRESS: return "in (ingress)";
+    case TRAFFIC_DIR_EGRESS:  return "out (egress)";
+    case TRAFFIC_DIR_BOTH:    return "both (bidirectional)";
+    default:                  return "unknown";
+    }
+}
+
+const char *mode_to_str(enum attach_mode mode)
+{
+    switch (mode) {
+    case ATTACH_MODE_HYBRID: return "hybrid (XDP Ingress + TC Egress)";
+    case ATTACH_MODE_TC:     return "tc (TC Ingress + TC Egress)";
+    case ATTACH_MODE_XDP:    return "xdp (Ingress only)";
+    default:                 return "unknown";
+    }
+}
 
 void config_set_defaults(struct firewall_config *cfg)
 {
     memset(cfg, 0, sizeof(*cfg));
-    strncpy(cfg->interface, "veth_server", sizeof(cfg->interface) - 1);
+    strncpy(cfg->interface, "eth0", sizeof(cfg->interface) - 1);
     strncpy(cfg->log_level, "info", sizeof(cfg->log_level) - 1);
+    cfg->direction = TRAFFIC_DIR_BOTH;
+    cfg->mode = ATTACH_MODE_HYBRID; /* Default: XDP ingress + TC egress */
 
     cfg->global.stats_interval_sec = 1;
     cfg->global.ringbuf_poll_timeout_ms = 100;
     cfg->global.default_policy = 1; /* PASS */
-
 }
 
 static char *trim_whitespace(char *str)
@@ -62,8 +84,40 @@ int config_load_file(const char *path, struct firewall_config *cfg)
             strncpy(cfg->interface, val, sizeof(cfg->interface) - 1);
         } else if (strcmp(key, "log_level") == 0) {
             strncpy(cfg->log_level, val, sizeof(cfg->log_level) - 1);
+        } else if (strcmp(key, "direction") == 0) {
+            if (strcasecmp(val, "in") == 0 || strcasecmp(val, "ingress") == 0) {
+                cfg->direction = TRAFFIC_DIR_INGRESS;
+            } else if (strcasecmp(val, "out") == 0 || strcasecmp(val, "egress") == 0) {
+                cfg->direction = TRAFFIC_DIR_EGRESS;
+            } else {
+                cfg->direction = TRAFFIC_DIR_BOTH;
+            }
+        } else if (strcmp(key, "mode") == 0) {
+            if (strcasecmp(val, "hybrid") == 0 || strcasecmp(val, "xdp+tc") == 0 || strcasecmp(val, "xdp_tc") == 0) {
+                cfg->mode = ATTACH_MODE_HYBRID;
+            } else if (strcasecmp(val, "xdp") == 0) {
+                cfg->mode = ATTACH_MODE_XDP;
+            } else {
+                cfg->mode = ATTACH_MODE_TC;
+            }
         } else if (strcmp(current_section, "global") == 0) {
-            if (strcmp(key, "stats_interval_sec") == 0) {
+            if (strcmp(key, "direction") == 0) {
+                if (strcasecmp(val, "in") == 0 || strcasecmp(val, "ingress") == 0) {
+                    cfg->direction = TRAFFIC_DIR_INGRESS;
+                } else if (strcasecmp(val, "out") == 0 || strcasecmp(val, "egress") == 0) {
+                    cfg->direction = TRAFFIC_DIR_EGRESS;
+                } else {
+                    cfg->direction = TRAFFIC_DIR_BOTH;
+                }
+            } else if (strcmp(key, "mode") == 0) {
+                if (strcasecmp(val, "hybrid") == 0 || strcasecmp(val, "xdp+tc") == 0 || strcasecmp(val, "xdp_tc") == 0) {
+                    cfg->mode = ATTACH_MODE_HYBRID;
+                } else if (strcasecmp(val, "xdp") == 0) {
+                    cfg->mode = ATTACH_MODE_XDP;
+                } else {
+                    cfg->mode = ATTACH_MODE_TC;
+                }
+            } else if (strcmp(key, "stats_interval_sec") == 0) {
                 cfg->global.stats_interval_sec = atoi(val);
             } else if (strcmp(key, "ringbuf_poll_timeout_ms") == 0) {
                 cfg->global.ringbuf_poll_timeout_ms = atoi(val);
@@ -92,5 +146,7 @@ void config_dump(const struct firewall_config *cfg)
 {
     printf("[*] Loaded Firewall Configuration:\n");
     printf("    - Interface: %s\n", cfg->interface);
+    printf("    - Mode:      %s\n", mode_to_str(cfg->mode));
+    printf("    - Direction: %s\n", direction_to_str(cfg->direction));
     printf("    - Log Level: %s\n", cfg->log_level);
 }
