@@ -126,7 +126,7 @@ static int attach_tc_egress(struct bpf_loader_ctx *ctx)
 int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const struct firewall_config *cfg)
 {
     memset(ctx, 0, sizeof(*ctx));
-    strncpy(ctx->ifname, cfg->interface, sizeof(ctx->ifname) - 1);
+    snprintf(ctx->ifname, sizeof(ctx->ifname), "%s", cfg->interface);
     ctx->direction = cfg->direction;
     ctx->mode = cfg->mode;
 

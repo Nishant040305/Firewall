@@ -27,8 +27,8 @@ const char *mode_to_str(enum attach_mode mode)
 void config_set_defaults(struct firewall_config *cfg)
 {
     memset(cfg, 0, sizeof(*cfg));
-    strncpy(cfg->interface, "eth0", sizeof(cfg->interface) - 1);
-    strncpy(cfg->log_level, "info", sizeof(cfg->log_level) - 1);
+    snprintf(cfg->interface, sizeof(cfg->interface), "eth0");
+    snprintf(cfg->log_level, sizeof(cfg->log_level), "info");
     cfg->direction = TRAFFIC_DIR_BOTH;
     cfg->mode = ATTACH_MODE_HYBRID; /* Default: XDP ingress + TC egress */
 
@@ -69,7 +69,7 @@ int config_load_file(const char *path, struct firewall_config *cfg)
         /* Section Header (e.g., "global:") */
         if (p[strlen(p) - 1] == ':') {
             p[strlen(p) - 1] = '\0';
-            strncpy(current_section, p, sizeof(current_section) - 1);
+            snprintf(current_section, sizeof(current_section), "%s", p);
             continue;
         }
 
@@ -81,9 +81,9 @@ int config_load_file(const char *path, struct firewall_config *cfg)
         char *val = trim_whitespace(colon + 1);
 
         if (strcmp(key, "interface") == 0) {
-            strncpy(cfg->interface, val, sizeof(cfg->interface) - 1);
+            snprintf(cfg->interface, sizeof(cfg->interface), "%s", val);
         } else if (strcmp(key, "log_level") == 0) {
-            strncpy(cfg->log_level, val, sizeof(cfg->log_level) - 1);
+            snprintf(cfg->log_level, sizeof(cfg->log_level), "%s", val);
         } else if (strcmp(key, "direction") == 0) {
             if (strcasecmp(val, "in") == 0 || strcasecmp(val, "ingress") == 0) {
                 cfg->direction = TRAFFIC_DIR_INGRESS;

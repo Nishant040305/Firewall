@@ -29,7 +29,7 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
 
     /* Apply CLI overrides */
     if (ctx->opts.iface) {
-        strncpy(ctx->config.interface, ctx->opts.iface, sizeof(ctx->config.interface) - 1);
+        snprintf(ctx->config.interface, sizeof(ctx->config.interface), "%s", ctx->opts.iface);
     }
     if (ctx->opts.direction) {
         if (strcasecmp(ctx->opts.direction, "in") == 0 || strcasecmp(ctx->opts.direction, "ingress") == 0) {
