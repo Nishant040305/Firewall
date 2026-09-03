@@ -1,147 +1,151 @@
-# Firewall Design Document
+# Comprehensive Stateful eBPF/XDP Firewall Architecture & Implementation Guide
 
-## 1. Overview
+## 1. Overview & Core Philosophy
 
-This project implements a high-performance firewall using eBPF/XDP for packet filtering in the kernel and a separate userspace control plane for configuration, policy management, and observability. The design emphasizes early packet handling, a small kernel-side attack surface, and a clean split between fast-path enforcement and slow-path management.
+This project implements a high-performance, kernel-native stateful firewall using **eBPF (Extended Berkeley Packet Filter)** and **XDP (eXpress Data Path)** on Linux. The system provides sub-microsecond packet classification, line-rate throughput, stateful TCP/UDP/ICMP flow tracking, and dynamic rule management from userspace without kernel recompilation.
 
-The core idea is simple: the kernel should do the minimum work required to make an allow/deny decision, while userspace owns policy authoring, deployment, testing, and telemetry. That separation keeps the packet path fast and predictable and keeps higher-level logic out of the kernel.
+The architecture strictly follows a **split dataplane/control-plane model**:
+- **Kernel Dataplane (eBPF/XDP)**: Fast-path packet parsing, state validation, rule matching, and line-rate enforcement (`XDP_PASS` / `XDP_DROP`).
+- **Userspace Control Plane (`firewallctl` / `fw-ctl`)**: Rule configuration, connection state inspection, telemetry aggregation, and lifecycle management.
 
-## 2. Design Goals
+---
 
-The firewall is designed around the following goals:
+## 2. The 16-Step Design & Architecture Blueprint
 
-1. Filter traffic as early as possible to reduce overhead and limit exposure to unwanted packets.
-2. Keep the kernel program small, deterministic, and easy to verify.
-3. Make policy changes manageable from userspace without rebuilding kernel logic.
-4. Support a testable architecture that can be exercised in isolated network environments.
-5. Provide a structure that can grow from basic packet filtering into richer enforcement and telemetry.
+```
++----------------------------------------------------------------------------------------------------+
+|                                      LINUX HOST (Step 1 & Step 4)                                   |
+|                                                                                                    |
+|  +---------------------------------------------------+    +-------------------------------------+  |
+|  |           UNTRUSTED NETWORK (Step 3)              |    |       PROTECTED NETWORK (Step 3)    |  |
+|  |           Subnet: 10.10.1.0/24                    |    |       Subnet: 10.10.2.0/24          |  |
+|  |  +-----------------------+ +--------------------+ |    |  +-------------------------------+  |  |
+|  |  |   Client Container    | | Attacker Container | |    |  |      Webserver Container      |  |  |
+|  |  |    (10.10.1.20)       | |   (10.10.1.10)     | |    |  |          (10.10.2.10)         |  |  |
+|  |  |   Legitimate Traffic  | |  Floods & Scans    | |    |  |    Nginx (80), iperf3 (5201)  |  |  |
+|  |  +-----------+-----------+ +---------+----------+ |    |  +---------------+---------------+  |  |
+|  +--------------|-----------------------|------------+    +------------------|------------------+  |
+|                 +-----------+-----------+                                    |                     |
+|                             | (veth pair)                                    | (veth pair)         |
+|                             v                                                v                     |
+|               +----------------------------+                  +----------------------------+       |
+|               |  Bridge: incus-untrust     |                  |   Bridge: incus-protect    |       |
+|               |  IP: 10.10.1.1/24          |                  |   IP: 10.10.2.1/24         |       |
+|               +--------------+-------------+                  +--------------+-------------+       |
+|                              |                                               ^                     |
+|                              v                                               |                     |
+|                 +----------------------------+                               |                     |
+|                 |  XDP Ingress Hook (Step 5) |                               |                     |
+|                 +--------------+-------------+                               |                     |
+|                                |                                             |                     |
+|                                v                                             |                     |
+|         +---------------------------------------------+                      |                     |
+|         |  eBPF 4-Stage Firewall Pipeline (Step 6)    |                      |                     |
+|         |   1. 5-Tuple Packet Parser (Step 7)         |                      |                     |
+|         |   2. Stateful Connection Engine (Step 9)    |                      |                     |
+|         |   3. Dynamic Rule Matcher (Step 8)          |                      |                     |
+|         |   4. Telemetry & Stats Counters (Step 11)   |                      |                     |
+|         +----------------------+----------------------+                      |                     |
+|                                |                                             |                     |
+|                 +--------------+--------------+                              |                     |
+|                 |                             |                              |                     |
+|           [ XDP_DROP ]                  [ XDP_PASS ]                         |                     |
+|        (Attacks / Out-of-State)               |                              |                     |
+|                                               v                              |                     |
+|                               +-------------------------------+              |                     |
+|                               | Host IPv4 Routing Plane (FIB) |--------------+                     |
+|                               |  (net.ipv4.ip_forward = 1)    |                                    |
+|                               +-------------------------------+                                    |
++----------------------------------------------------------------------------------------------------+
+```
 
-## 3. High-Level Architecture
+---
 
-The repository is intentionally split into three layers:
+### Step 1: Set up one Linux machine as the host
+- All components, virtual network bridges, containers, and kernel hooks run on a single host.
+- Host requirements: Linux Kernel >= 5.15 with BTF support (`/sys/kernel/btf/vmlinux`), Clang/LLVM toolchain, and `ip_forward=1`.
 
-- Kernel dataplane: eBPF programs under `src/kernel/` perform packet inspection and enforcement.
-- Userspace control plane: code under `src/userspace/` loads programs, applies policy, and reports status.
-- Shared definitions: headers under `include/` hold common constants, protocol types, and reusable structures.
+### Step 2: Create virtual machines/containers using Incus
+- Incus provisions lightweight system containers that provide isolated network namespaces and individual IP addresses without the virtualization overhead of full virtual machines.
+- Containers: `client` (10.10.1.20), `attacker` (10.10.1.10), `webserver` (10.10.2.10), `admin` (10.10.99.10).
 
-This layout separates concerns by execution context. The kernel path handles packets at line rate, while userspace can afford more flexibility for parsing configuration, coordinating updates, and producing logs or telemetry.
+### Step 3: Organise containers into three networks
+- **Untrusted Segment (`incus-untrust` - 10.10.1.0/24)**: Houses clients and the attacker simulator.
+- **Protected Segment (`incus-protect` - 10.10.2.0/24)**: Houses target services (Nginx, backend applications).
+- **Management Segment (`incus-mgmt` - 10.10.99.0/24)**: Isolated network for administration and monitoring to prevent operator lockout during aggressive firewall policy tests.
 
-## 4. Packet Processing Model
+### Step 4: Connect networks through the Linux host, not through a container
+- Container networks are joined on the host via bridge interfaces and `veth` pairs.
+- The host routing engine (`net.ipv4.ip_forward = 1`) routes traffic across subnets.
+- The firewall attaches directly to this forwarding path on the host, operating at the bare-metal kernel driver layer.
 
-The packet path follows a layered decision model:
+### Step 5: Attach the firewall using XDP
+- The XDP hook (`xdp_firewall_prog`) intercepts incoming packets at the network device driver layer (or generic SKB fallback) prior to `sk_buff` allocation or netfilter traversal, saving up to 90% of kernel CPU overhead during high packet loads.
 
-1. A packet arrives at the network interface.
-2. The XDP/eBPF program inspects the frame before the kernel networking stack performs full processing.
-3. The program classifies the packet using protocol-aware filters and policy rules.
-4. The packet is either passed through, redirected, or dropped depending on the configured rule set.
+### Step 6: Write the firewall logic in eBPF
+The kernel fast-path executes a four-stage pipeline:
+1. **Parser**: Validates Ethernet, IPv4, TCP/UDP/ICMP headers.
+2. **State Engine**: Validates connection state (TCP handshake, sequence tracking, UDP flow activity).
+3. **Rule Engine**: Evaluates user-defined policies for initial connection establishment.
+4. **Decision & Telemetry Engine**: Returns `XDP_PASS` or `XDP_DROP` and emits telemetry events to the BPF ring buffer.
 
-The main design choice here is to move enforcement as far left as possible in the networking stack. That reduces the amount of work done on traffic that will ultimately be denied and helps the firewall scale under load.
+### Step 7: Parse each packet into its five identifying fields
+- For every packet, extracts: `src_ip`, `dst_ip`, `src_port`, `dst_port`, `proto`.
+- Validates TCP control flags (`SYN`, `ACK`, `FIN`, `RST`, `PSH`, `URG`).
 
-## 5. Kernel Side Responsibilities
+### Step 8: Keep firewall rules outside the eBPF program
+- Rules are stored in a dedicated `BPF_MAP_TYPE_ARRAY` (`rules_map`).
+- Each entry defines subnet masks, port ranges, protocol filters, actions (`ALLOW`, `DROP`), and hit counters.
+- Rules can be updated dynamically via `firewallctl` without rebuilding or reloading the eBPF kernel program.
 
-The kernel side should remain focused on a narrow set of responsibilities:
+### Step 9: Add connection state to make it a stateful firewall
+- Flow states are tracked in `conntrack_map` (`BPF_MAP_TYPE_HASH`).
+- **TCP State Machine**:
+  - `SYN` (new flow allowed by rule) -> `CONN_STATE_SYN_SENT`.
+  - `SYN-ACK` (from server) -> `CONN_STATE_SYN_RECV`.
+  - `ACK` (handshake complete) -> `CONN_STATE_ESTABLISHED` (Fast-path allow).
+  - `FIN` / `RST` -> `CONN_STATE_FIN_WAIT` / `CONN_STATE_CLOSED`.
+  - **Unsolicited out-of-state packets** (e.g. non-SYN packets with no prior state) are dropped immediately (`XDP_DROP`).
+- **UDP & ICMP**: Pseudo-connection state tracking with automatic inactivity timeouts.
 
-- Parse only the packet metadata needed for an enforcement decision.
-- Evaluate protocol-specific conditions using small, predictable helpers.
-- Apply the policy result immediately.
-- Emit lightweight telemetry or counters when necessary, but avoid expensive per-packet work.
+### Step 10: Build the userspace control tool (`firewallctl`)
+- `firewallctl` interacts with BPF maps via `libbpf`:
+  - `firewallctl rule add / del / list / flush / load`
+  - `firewallctl conntrack list / flush`
+  - `firewallctl stats show / reset`
+  - `firewallctl monitor`
 
-The `src/kernel/` tree suggests a modular organization for the dataplane, with separate areas for core logic, protocol handling, and filters. That structure supports incremental growth without turning the fast path into a monolith.
+### Step 11: Collect granular statistics
+- `stats_map` (`BPF_MAP_TYPE_PERCPU_ARRAY`) maintains line-rate per-CPU counters:
+  - Total packets received, allowed, and dropped.
+  - Breakdown by protocol: TCP, UDP, ICMP, Other.
+  - Drop classifications: policy drop, unsolicited/out-of-state drop, malformed drop.
+  - Stateful connection lifecycle: new, established, closed, timed out.
 
-## 6. Userspace Responsibilities
+### Step 12: Build a baseline for comparison (nftables vs. XDP)
+- `test/benchmark_baseline_nftables.sh` benchmarks identical stateful policies in `nftables` vs `eBPF/XDP`.
+- Measures throughput (iperf3), latency (ping RTT), and CPU utilization under SYN floods.
 
-Userspace owns the higher-level firewall lifecycle:
+### Step 13: Generate test traffic
+- Tools inside the container lab:
+  - `curl` / `nginx`: HTTP web traffic.
+  - `iperf3`: Max-bandwidth throughput.
+  - `ping`: ICMP latency and reachability.
+  - `hping3`: TCP SYN floods, UDP blasts, ICMP floods, malformed Xmas packets, and unsolicited ACK injection.
 
-- Load and attach the eBPF programs.
-- Read firewall configuration and rule definitions.
-- Translate human-readable policy into kernel-friendly structures.
-- Coordinate updates safely when rules change.
-- Surface status, counters, and diagnostics.
+### Step 14: Run through the test cases
+- `test/run_all_tests.sh` verifies:
+  1. Allowed traffic passes (HTTP :80 & ICMP).
+  2. Blocked ports are dropped (Port 8080 / Port 22).
+  3. Full TCP handshake is tracked in the state table.
+  4. Unsolicited packets with no matching state are dropped.
 
-This separation is a deliberate design choice. If policy logic stays in userspace, the kernel program remains simpler and easier to validate. It also becomes easier to extend policy formats over time without destabilizing the dataplane.
+### Step 15: Validate the exact packet path first
+- `scripts/trace_packet_path.sh` and `docs/PACKET_PATH_VALIDATION.md` document the six-stage transit lifecycle across Incus bridges, veth pairs, XDP hooks, routing FIBs, and target containers.
 
-## 7. Policy Model
-
-Policy is expected to be expressed as explicit firewall rules rather than embedded directly in code. The repository includes `config/firewall.yaml` and `config/rules.yaml`, which indicates a configuration-driven approach.
-
-The intended policy model is:
-
-- Define network segments and firewall behavior in a declarative form.
-- Describe allow, deny, and inspection rules at a protocol-aware level.
-- Keep rule ordering and precedence explicit so behavior is predictable.
-- Push only the normalized representation required by the kernel into the dataplane.
-
-This approach keeps policy easier to audit. It also allows the firewall to be retargeted to different environments without rewriting the enforcement logic.
-
-## 8. Shared Types And Constants
-
-The `include/` tree is reserved for shared types, constants, and protocol definitions used by both kernel and userspace code. This is important for eBPF projects because both sides must agree on structure layouts, protocol values, and limits.
-
-The design principle here is to keep shared headers stable and minimal:
-
-- Shared definitions should be small enough to compile cleanly into both environments.
-- Kernel-visible layouts should avoid unnecessary fields.
-- Constants should capture protocol limits, buffer sizes, and decision codes in one place.
-
-This minimizes drift between the control plane and dataplane and reduces the risk of layout mismatches.
-
-## 9. Observability And Telemetry
-
-Firewall systems are only useful if decisions can be explained. The repository includes a `src/userspace/telemetry/` area, which suggests a separate observability path for counters, event reporting, or trace output.
-
-The design preference is to keep observability lightweight in the kernel and richer in userspace:
-
-- Kernel-side counters can capture packet totals, drops, and rule hits.
-- Userspace can aggregate, format, and export those signals.
-- Logs should explain why a packet was blocked without forcing the kernel to do string processing or expensive formatting.
-
-This maintains fast-path performance while still giving operators enough information to debug policy behavior.
-
-## 10. Test And Deployment Model
-
-The scripts in `scripts/` show that the firewall is meant to be exercised in an isolated lab environment. The setup uses Incus containers representing attacker, client, webserver, and admin roles, with separate virtual networks for untrusted, protected, and management traffic.
-
-That test topology is a strong design choice because it allows the firewall to be validated against realistic traffic flows:
-
-- Untrusted hosts simulate hostile or uncontrolled traffic.
-- Protected hosts represent the service being defended.
-- A management segment supports administration and inspection.
-
-This makes it possible to verify policy behavior without depending on a production network.
-
-## 11. Design Tradeoffs
-
-The chosen architecture makes a few explicit tradeoffs:
-
-- More logic moves into configuration and userspace, which increases control-plane complexity but reduces kernel risk.
-- Packet decisions are fast and simple, but advanced policy evaluation must be normalized before reaching the kernel.
-- The system is modular and testable, but requires discipline to keep shared definitions aligned across components.
-
-These tradeoffs are intentional. For a firewall, predictability, observability, and safety are generally more valuable than embedding complex behavior directly in the dataplane.
-
-## 12. Security Considerations
-
-The design tries to minimize the kernel attack surface by keeping the dataplane small and data-driven. Important security principles include:
-
-- Reject traffic as early as possible.
-- Parse only what is needed for a decision.
-- Avoid unbounded loops or expensive kernel work.
-- Treat userspace input as untrusted until validated and normalized.
-- Keep rule updates atomic or clearly versioned so partial state does not leak into enforcement.
-
-The firewall should also fail closed where appropriate. If policy cannot be loaded or validated, the safe default is to deny rather than accidentally permit traffic.
-
-## 13. Extensibility
-
-The directory structure is prepared for future growth without changing the core architecture. Likely expansion points include:
-
-- Additional protocol handlers under `src/kernel/protocols/` and `src/userspace/protocols/`.
-- More detailed rule engines under `src/userspace/rules/`.
-- Richer telemetry and reporting.
-- Alternate deployment modes or test topologies.
-
-Because the kernel and userspace paths are already separated, these features can be added incrementally without entangling policy management with packet enforcement.
-
-## 14. Summary
-
-The firewall is designed as a split architecture: eBPF/XDP provides the fast enforcement path, while userspace manages policy, deployment, and observability. This is the right shape for a firewall because it balances performance, safety, and maintainability. The result is a system that is easy to reason about, easy to test in isolated network labs, and flexible enough to evolve as the rule model becomes more sophisticated.
+### Step 16: Treat this as an expandable platform
+- `docs/ARCHITECTURE_AND_EXTENSIONS.md` details future platform extensions:
+  - Token-bucket per-IP rate limiting.
+  - Stateless SYN Cookies for DDoS protection.
+  - Adaptive dynamic blacklisting of repeat offenders.
+  - Flow telemetry export for Machine Learning anomaly detection.
