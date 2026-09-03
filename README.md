@@ -167,6 +167,23 @@ bash scripts/trace_packet_path.sh
 
 ---
 
+## 📚 Detailed Documentation
+
+For in-depth, professor-grade technical documentation covering every aspect of the project, refer to the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [**00 — Documentation Index**](docs/00_INDEX.md) | Master navigation index with project structure and architecture overview |
+| [**01 — Container Lab Setup**](docs/01_CONTAINER_LAB_SETUP.md) | Incus container testbed, three-segment network topology, veth pairs, bridges |
+| [**02 — eBPF/XDP Dataplane**](docs/02_EBPF_DATAPLANE.md) | Kernel fast-path pipeline: 4-stage processing, BPF maps, TCP state machine |
+| [**03 — Build Process**](docs/03_BUILD_PROCESS.md) | Two-phase compilation (Clang BPF + GCC native), dependencies, Makefile targets |
+| [**04 — Userspace Control Plane**](docs/04_USERSPACE_CONTROL_PLANE.md) | `firewallctl` CLI reference, BPF loader lifecycle, configuration, map pinning |
+| [**05 — Testing & Validation**](docs/05_TESTING_AND_VALIDATION.md) | Automated test suite, nftables benchmark, traffic generation, attack simulation |
+| [**06 — Packet Path Validation**](docs/PACKET_PATH_VALIDATION.md) | Six-stage packet transit lifecycle from container to container through XDP/TC hooks |
+| [**07 — Platform Extensions**](docs/ARCHITECTURE_AND_EXTENSIONS.md) | Future modules: rate limiting, SYN cookies, adaptive blacklisting, ML telemetry |
+
+---
+
 ## 🧹 Teardown
 
 To clean up all test containers and virtual network bridges:
