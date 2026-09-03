@@ -27,15 +27,21 @@ struct bpf_loader_ctx {
     struct bpf_tc_opts tc_opts_egress;
     int tc_egress_attached;
 
-    int tc_hook_created;
-
     /* Map FDs */
     int stats_map_fd;
     int events_ringbuf_fd;
+    int rules_map_fd;
+    int conntrack_map_fd;
 };
 
 /* Load BPF object, attach programs (TC or XDP, Ingress / Egress / Both), and fetch map FDs */
 int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const struct firewall_config *cfg);
+
+/* Pin maps to bpffs */
+int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx);
+
+/* Open pinned maps from bpffs for CLI management */
+int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx);
 
 /* Detach all attached BPF programs from interface and close BPF object */
 void bpf_loader_cleanup(struct bpf_loader_ctx *ctx);

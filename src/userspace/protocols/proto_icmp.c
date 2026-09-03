@@ -13,10 +13,13 @@ static void icmp_format_event(const struct packet_event *evt, char *buf, size_t 
 
     const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                           (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+    const char *act_str = (evt->action == ACTION_PASS) ? "ALLOW" : "DROP ";
 
-    snprintf(buf, len, "[PACKET] %s | ICMP | %s -> %s (%u bytes)",
-             dir_str,
-             src, dst, evt->pkt_len);
+    snprintf(buf, len, "[%s] %s | ICMP | %s -> %s | State: %u (%u bytes)",
+             act_str, dir_str,
+             src, dst,
+             evt->conn_state,
+             evt->pkt_len);
 }
 
 const struct protocol_adapter icmp_adapter = {

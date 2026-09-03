@@ -13,11 +13,13 @@ static void udp_format_event(const struct packet_event *evt, char *buf, size_t l
 
     const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                           (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+    const char *act_str = (evt->action == ACTION_PASS) ? "ALLOW" : "DROP ";
 
-    snprintf(buf, len, "[PACKET] %s | UDP  | %s:%-5u -> %s:%-5u (%u bytes)",
-             dir_str,
+    snprintf(buf, len, "[%s] %s | UDP  | %s:%-5u -> %s:%-5u | State: %u (%u bytes)",
+             act_str, dir_str,
              src, ntohs(evt->src_port),
              dst, ntohs(evt->dst_port),
+             evt->conn_state,
              evt->pkt_len);
 }
 

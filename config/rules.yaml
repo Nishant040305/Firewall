@@ -1,0 +1,30 @@
+# ==========================================================
+#         Firewall Policy Rules (Step 8)
+# ==========================================================
+# Rules are evaluated sequentially. First match applies.
+# Matched connections are tracked statefully in eBPF.
+
+- name: "Allow HTTP Web Traffic"
+  proto: tcp
+  dst: 10.10.2.10
+  dport: 80
+  action: allow
+  desc: "Nginx HTTP"
+
+- name: "Allow iperf3 Benchmark"
+  proto: tcp
+  dst: 10.10.2.10
+  dport: 5201
+  action: allow
+  desc: "iperf3 Throughput"
+
+- name: "Allow ICMP Ping"
+  proto: icmp
+  action: allow
+  desc: "ICMP Echo"
+
+- name: "Allow DNS Queries"
+  proto: udp
+  dport: 53
+  action: allow
+  desc: "DNS Queries"

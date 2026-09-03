@@ -13,11 +13,21 @@ static void tcp_format_event(const struct packet_event *evt, char *buf, size_t l
 
     const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                           (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
+    const char *act_str = (evt->action == ACTION_PASS) ? "ALLOW" : "DROP ";
 
-    snprintf(buf, len, "[PACKET] %s | TCP  | %s:%-5u -> %s:%-5u (%u bytes)",
-             dir_str,
+    char flags_str[32] = "";
+    if (evt->tcp_flags & 0x02) strcat(flags_str, "SYN ");
+    if (evt->tcp_flags & 0x10) strcat(flags_str, "ACK ");
+    if (evt->tcp_flags & 0x01) strcat(flags_str, "FIN ");
+    if (evt->tcp_flags & 0x04) strcat(flags_str, "RST ");
+    if (evt->tcp_flags & 0x08) strcat(flags_str, "PSH ");
+    if (strlen(flags_str) == 0) strcpy(flags_str, "--- ");
+
+    snprintf(buf, len, "[%s] %s | TCP  | %s:%-5u -> %s:%-5u | Flags: %-8s | State: %u (%u bytes)",
+             act_str, dir_str,
              src, ntohs(evt->src_port),
              dst, ntohs(evt->dst_port),
+             flags_str, evt->conn_state,
              evt->pkt_len);
 }
 

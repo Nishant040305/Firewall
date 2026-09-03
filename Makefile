@@ -20,6 +20,9 @@ USER_SRCS = src/userspace/main.c \
             src/userspace/core/config.c \
             src/userspace/core/bpf_loader.c \
             src/userspace/core/firewall_ctx.c \
+            src/userspace/core/rules_mgr.c \
+            src/userspace/core/conntrack_mgr.c \
+            src/userspace/core/stats_mgr.c \
             src/userspace/utils/ip_utils.c \
             src/userspace/utils/format_utils.c \
             src/userspace/protocols/protocol_registry.c \
@@ -30,6 +33,7 @@ USER_SRCS = src/userspace/main.c \
 
 USER_OBJS = $(patsubst src/userspace/%.c,$(BUILD_DIR)/%.o,$(USER_SRCS))
 USER_BIN = $(BUILD_DIR)/fw-ctl
+CTL_ALIAS = $(BUILD_DIR)/firewallctl
 
 .DEFAULT_GOAL := all
 
@@ -53,6 +57,7 @@ $(BUILD_DIR)/%.o: src/userspace/%.c | $(BUILD_DIR)
 
 $(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
+	ln -sf fw-ctl $(CTL_ALIAS)
 
 clean:
 	rm -rf $(BUILD_DIR)

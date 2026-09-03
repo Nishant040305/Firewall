@@ -199,7 +199,35 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
     /* Retrieve Map FDs */
     ctx->stats_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "stats_map");
     ctx->events_ringbuf_fd = bpf_object__find_map_fd_by_name(ctx->obj, "events_ringbuf");
+    ctx->rules_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "rules_map");
+    ctx->conntrack_map_fd  = bpf_object__find_map_fd_by_name(ctx->obj, "conntrack_map");
 
+    /* Pin maps to bpffs if directory exists or can be created */
+    bpf_loader_pin_maps(ctx);
+
+    return 0;
+}
+
+int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx)
+{
+    if (!ctx->obj) return -1;
+
+    /* Create bpffs dir if not exists */
+    bpf_object__pin_maps(ctx->obj, BPF_FS_PATH);
+    return 0;
+}
+
+int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx)
+{
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->rules_map_fd = bpf_obj_get(MAP_PIN_RULES);
+    ctx->conntrack_map_fd = bpf_obj_get(MAP_PIN_CONNTRACK);
+    ctx->stats_map_fd = bpf_obj_get(MAP_PIN_STATS);
+    ctx->events_ringbuf_fd = bpf_obj_get(MAP_PIN_EVENTS);
+
+    if (ctx->rules_map_fd < 0 && ctx->stats_map_fd < 0 && ctx->conntrack_map_fd < 0) {
+        return -1;
+    }
     return 0;
 }
 
