@@ -4,7 +4,7 @@
 #include <linux/tcp.h>
 #include "../core/context.bpf.h"
 
-/* Parse TCP Header and extract ports */
+/* Parse TCP Header, extract ports and flags */
 static __always_inline int parse_tcp(struct pkt_ctx *pkt)
 {
     struct tcphdr *tcp = (struct tcphdr *)pkt->l4_hdr;
@@ -14,6 +14,7 @@ static __always_inline int parse_tcp(struct pkt_ctx *pkt)
 
     pkt->src_port = tcp->source;
     pkt->dst_port = tcp->dest;
+    pkt->tcp_flags = *((__u8 *)tcp + 13);
     return 0;
 }
 

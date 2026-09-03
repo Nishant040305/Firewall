@@ -14,6 +14,7 @@ struct pkt_ctx {
     __u32 pkt_len;
     __u16 eth_proto;
     __u8  direction;
+    __u8  proto;
     struct ethhdr *eth;
     struct iphdr  *iph;
     void *l4_hdr;
@@ -21,7 +22,10 @@ struct pkt_ctx {
     __u32 dst_ip;
     __u16 src_port;
     __u16 dst_port;
-    __u8  proto;
+    __u8  tcp_flags;
+    __u8  action;
+    __u8  conn_state;
+    __u32 rule_id;
 };
 
 /* Initialize packet context from raw XDP metadata (Ingress only) */
@@ -32,6 +36,7 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->pkt_len = (__u32)(pctx->data_end - pctx->data);
     pctx->direction = DIR_INGRESS;
     pctx->eth_proto = 0;
+    pctx->proto = 0;
     pctx->eth = NULL;
     pctx->iph = NULL;
     pctx->l4_hdr = NULL;
@@ -39,7 +44,10 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->dst_ip = 0;
     pctx->src_port = 0;
     pctx->dst_port = 0;
-    pctx->proto = 0;
+    pctx->tcp_flags = 0;
+    pctx->action = ACTION_PASS;
+    pctx->conn_state = CONN_STATE_INVALID;
+    pctx->rule_id = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
@@ -61,6 +69,7 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->pkt_len = skb->len;
     pctx->direction = direction;
     pctx->eth_proto = 0;
+    pctx->proto = 0;
     pctx->eth = NULL;
     pctx->iph = NULL;
     pctx->l4_hdr = NULL;
@@ -68,7 +77,10 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->dst_ip = 0;
     pctx->src_port = 0;
     pctx->dst_port = 0;
-    pctx->proto = 0;
+    pctx->tcp_flags = 0;
+    pctx->action = ACTION_PASS;
+    pctx->conn_state = CONN_STATE_INVALID;
+    pctx->rule_id = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
