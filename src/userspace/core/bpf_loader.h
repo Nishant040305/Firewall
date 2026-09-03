@@ -27,6 +27,8 @@ struct bpf_loader_ctx {
     struct bpf_tc_opts tc_opts_egress;
     int tc_egress_attached;
 
+    int tc_hook_created;
+
     /* Map FDs */
     int stats_map_fd;
     int events_ringbuf_fd;
