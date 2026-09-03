@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <arpa/inet.h>
 #include <core/constants.h>
 #include "protocol_adapter.h"

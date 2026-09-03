@@ -43,8 +43,8 @@ int conntrack_mgr_list(int map_fd)
         struct flow_entry entry;
         if (bpf_map_lookup_elem(map_fd, &next_key, &entry) == 0) {
             count++;
-            char src_ip[20], dst_ip[20];
-            char src_str[24], dst_str[24];
+            char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
+            char src_str[32], dst_str[32];
             ip_to_str(next_key.src_ip, src_ip, sizeof(src_ip));
             ip_to_str(next_key.dst_ip, dst_ip, sizeof(dst_ip));
 
