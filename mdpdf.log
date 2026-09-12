@@ -1,0 +1,774 @@
+    INFO: 2026-09-04 00:08:59,010:               log.py:   20: Logging to /home/Nishant/code/FirewallProgram/mdpdf.log
+   DEBUG: 2026-09-04 00:08:59,010:               cli.py:  103: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md
+    INFO: 2026-09-04 00:08:59,011:         converter.py:   14: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md
+   DEBUG: 2026-09-04 00:08:59,061:      pdf_renderer.py:  470: printSegment: title: 
+   DEBUG: 2026-09-04 00:08:59,064:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,066:      pdf_renderer.py:  470: printSegment: High-Performance Stateful eBPF/XDP Firewall
+   DEBUG: 2026-09-04 00:08:59,067:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,068:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,069:      pdf_renderer.py:  470: printSegment: subtitle: 
+   DEBUG: 2026-09-04 00:08:59,070:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,071:      pdf_renderer.py:  470: printSegment: Comprehensive Technical Documentation
+   DEBUG: 2026-09-04 00:08:59,072:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,072:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,073:      pdf_renderer.py:  470: printSegment: author: 
+   DEBUG: 2026-09-04 00:08:59,074:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,075:      pdf_renderer.py:  470: printSegment: Nishant
+   DEBUG: 2026-09-04 00:08:59,076:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,077:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,078:      pdf_renderer.py:  470: printSegment: date: 
+   DEBUG: 2026-09-04 00:08:59,078:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,079:      pdf_renderer.py:  470: printSegment: September 2026
+   DEBUG: 2026-09-04 00:08:59,080:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2026-09-04 00:08:59,081:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,082:      pdf_renderer.py:  470: printSegment: geometry: margin=2.5cm
+   DEBUG: 2026-09-04 00:08:59,083:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,084:      pdf_renderer.py:  470: printSegment: fontsize: 11pt
+   DEBUG: 2026-09-04 00:08:59,084:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,085:      pdf_renderer.py:  470: printSegment: documentclass: report
+   DEBUG: 2026-09-04 00:08:59,086:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,087:      pdf_renderer.py:  470: printSegment: toc: true
+   DEBUG: 2026-09-04 00:08:59,088:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,089:      pdf_renderer.py:  470: printSegment: toc-depth:
+   DEBUG: 2026-09-04 00:08:59,090:      pdf_renderer.py:  470: printSegment: 3
+   DEBUG: 2026-09-04 00:08:59,091:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,092:      pdf_renderer.py:  470: printSegment: numbersections: true
+   DEBUG: 2026-09-04 00:08:59,093:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:08:59,094:      pdf_renderer.py:  470: printSegment: header-includes:
+   DEBUG: 2026-09-04 00:08:59,095:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,096:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,099:      pdf_renderer.py:  470: printSegment: usepackage{fancyhdr}
+   DEBUG: 2026-09-04 00:08:59,100:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,101:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,102:      pdf_renderer.py:  470: printSegment: pagestyle{fancy}
+   DEBUG: 2026-09-04 00:08:59,103:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,104:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,105:      pdf_renderer.py:  470: printSegment: fancyhead
+   DEBUG: 2026-09-04 00:08:59,106:      pdf_renderer.py:  470: printSegment: [
+   DEBUG: 2026-09-04 00:08:59,107:      pdf_renderer.py:  470: printSegment: L
+   DEBUG: 2026-09-04 00:08:59,108:      pdf_renderer.py:  470: printSegment: ]
+   DEBUG: 2026-09-04 00:08:59,109:      pdf_renderer.py:  470: printSegment: {eBPF/XDP Firewall Documentation}
+   DEBUG: 2026-09-04 00:08:59,110:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,111:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,112:      pdf_renderer.py:  470: printSegment: fancyhead
+   DEBUG: 2026-09-04 00:08:59,113:      pdf_renderer.py:  470: printSegment: [
+   DEBUG: 2026-09-04 00:08:59,114:      pdf_renderer.py:  470: printSegment: R
+   DEBUG: 2026-09-04 00:08:59,115:      pdf_renderer.py:  470: printSegment: ]
+   DEBUG: 2026-09-04 00:08:59,116:      pdf_renderer.py:  470: printSegment: {
+   DEBUG: 2026-09-04 00:08:59,117:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,118:      pdf_renderer.py:  470: printSegment: thepage}
+   DEBUG: 2026-09-04 00:08:59,119:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,120:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,121:      pdf_renderer.py:  470: printSegment: fancyfoot
+   DEBUG: 2026-09-04 00:08:59,122:      pdf_renderer.py:  470: printSegment: [
+   DEBUG: 2026-09-04 00:08:59,123:      pdf_renderer.py:  470: printSegment: C
+   DEBUG: 2026-09-04 00:08:59,124:      pdf_renderer.py:  470: printSegment: ]
+   DEBUG: 2026-09-04 00:08:59,125:      pdf_renderer.py:  470: printSegment: {}
+   DEBUG: 2026-09-04 00:08:59,126:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,127:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,128:      pdf_renderer.py:  470: printSegment: usepackage{listings}
+   DEBUG: 2026-09-04 00:08:59,129:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:08:59,130:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,131:      pdf_renderer.py:  470: printSegment: lstset{basicstyle=
+   DEBUG: 2026-09-04 00:08:59,132:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,133:      pdf_renderer.py:  470: printSegment: ttfamily
+   DEBUG: 2026-09-04 00:08:59,134:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:08:59,136:      pdf_renderer.py:  470: printSegment: small, breaklines=true, frame=single}
+   DEBUG: 2026-09-04 00:08:59,139:      pdf_renderer.py:  470: printSegment: High-Performance Stateful eBPF/XDP Firewall
+   DEBUG: 2026-09-04 00:08:59,142:      pdf_renderer.py:  470: printSegment: A high-throughput, kernel-native stateful firewall built on 
+   DEBUG: 2026-09-04 00:08:59,145:      pdf_renderer.py:  470: printSegment: eBPF
+   DEBUG: 2026-09-04 00:08:59,147:      pdf_renderer.py:  470: printSegment:  and 
+   DEBUG: 2026-09-04 00:08:59,149:      pdf_renderer.py:  470: printSegment: XDP
+   DEBUG: 2026-09-04 00:08:59,152:      pdf_renderer.py:  470: printSegment:  on Linux, paired with a flexible userspace
+   DEBUG: 2026-09-04 00:08:59,153:      pdf_renderer.py:  470: printSegment: control plane (
+   DEBUG: 2026-09-04 00:08:59,155:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:08:59,157:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:08:59,161:      pdf_renderer.py:  470: printSegment: 📋 Architectural Overview (The 16 Steps)
+   DEBUG: 2026-09-04 00:08:59,376:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2026-09-04 00:08:59,378:      pdf_renderer.py:  470: printSegment: Single Linux Host
+   DEBUG: 2026-09-04 00:08:59,381:      pdf_renderer.py:  470: printSegment: : Runs host routing, Incus container lab, and the eBPF kernel dataplane.
+   DEBUG: 2026-09-04 00:08:59,383:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2026-09-04 00:08:59,385:      pdf_renderer.py:  470: printSegment: Incus Containers
+   DEBUG: 2026-09-04 00:08:59,386:      pdf_renderer.py:  470: printSegment: : Lightweight containers (
+   DEBUG: 2026-09-04 00:08:59,388:      pdf_renderer.py:  470: printSegment: client
+   DEBUG: 2026-09-04 00:08:59,390:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:08:59,391:      pdf_renderer.py:  470: printSegment: attacker
+   DEBUG: 2026-09-04 00:08:59,393:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:08:59,394:      pdf_renderer.py:  470: printSegment: webserver
+   DEBUG: 2026-09-04 00:08:59,396:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:08:59,397:      pdf_renderer.py:  470: printSegment: admin
+   DEBUG: 2026-09-04 00:08:59,400:      pdf_renderer.py:  470: printSegment: ) acting as
+   DEBUG: 2026-09-04 00:08:59,402:      pdf_renderer.py:  470: printSegment: independent network hosts.
+   DEBUG: 2026-09-04 00:08:59,403:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2026-09-04 00:08:59,405:      pdf_renderer.py:  470: printSegment: Three Network Segments
+   DEBUG: 2026-09-04 00:08:59,407:      pdf_renderer.py:  470: printSegment: : Untrusted (
+   DEBUG: 2026-09-04 00:08:59,409:      pdf_renderer.py:  470: printSegment: 10.10.1.0/24
+   DEBUG: 2026-09-04 00:08:59,410:      pdf_renderer.py:  470: printSegment: ), Protected (
+   DEBUG: 2026-09-04 00:08:59,412:      pdf_renderer.py:  470: printSegment: 10.10.2.0/24
+   DEBUG: 2026-09-04 00:08:59,414:      pdf_renderer.py:  470: printSegment: ), and
+   DEBUG: 2026-09-04 00:08:59,416:      pdf_renderer.py:  470: printSegment: Management (
+   DEBUG: 2026-09-04 00:08:59,418:      pdf_renderer.py:  470: printSegment: 10.10.99.0/24
+   DEBUG: 2026-09-04 00:08:59,420:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:08:59,421:      pdf_renderer.py:  470: printSegment:  4 
+   DEBUG: 2026-09-04 00:08:59,423:      pdf_renderer.py:  470: printSegment: Host Routing
+   DEBUG: 2026-09-04 00:08:59,425:      pdf_renderer.py:  470: printSegment: : Joined via host bridges (
+   DEBUG: 2026-09-04 00:08:59,427:      pdf_renderer.py:  470: printSegment: incus-untrust
+   DEBUG: 2026-09-04 00:08:59,429:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:08:59,431:      pdf_renderer.py:  470: printSegment: incus-protect
+   DEBUG: 2026-09-04 00:08:59,434:      pdf_renderer.py:  470: printSegment: ) and routed by the
+   DEBUG: 2026-09-04 00:08:59,436:      pdf_renderer.py:  470: printSegment: host kernel.
+   DEBUG: 2026-09-04 00:08:59,438:      pdf_renderer.py:  470: printSegment:  5 
+   DEBUG: 2026-09-04 00:08:59,441:      pdf_renderer.py:  470: printSegment: XDP Ingress Hook
+   DEBUG: 2026-09-04 00:08:59,444:      pdf_renderer.py:  470: printSegment: : Early packet filtering before SKB allocation in the Linux network driver.
+   DEBUG: 2026-09-04 00:08:59,446:      pdf_renderer.py:  470: printSegment:  6 
+   DEBUG: 2026-09-04 00:08:59,449:      pdf_renderer.py:  470: printSegment: eBPF Logic Pipeline
+   DEBUG: 2026-09-04 00:08:59,452:      pdf_renderer.py:  470: printSegment: : 4-stage processing: Parser → State Engine → Rule Matcher → Telemetry.
+   DEBUG: 2026-09-04 00:08:59,477:      pdf_renderer.py:  470: printSegment:  7 
+   DEBUG: 2026-09-04 00:08:59,479:      pdf_renderer.py:  470: printSegment: 5-Tuple Packet Parsing
+   DEBUG: 2026-09-04 00:08:59,482:      pdf_renderer.py:  470: printSegment: : Extracts source/dest IP, source/dest port, protocol, and TCP flags.
+   DEBUG: 2026-09-04 00:08:59,484:      pdf_renderer.py:  470: printSegment:  8 
+   DEBUG: 2026-09-04 00:08:59,486:      pdf_renderer.py:  470: printSegment: Dynamic eBPF Rule Table
+   DEBUG: 2026-09-04 00:08:59,488:      pdf_renderer.py:  470: printSegment: : Policy rules stored in 
+   DEBUG: 2026-09-04 00:08:59,490:      pdf_renderer.py:  470: printSegment: rules_map
+   DEBUG: 2026-09-04 00:08:59,492:      pdf_renderer.py:  470: printSegment:  array for zero-recompile runtime
+   DEBUG: 2026-09-04 00:08:59,494:      pdf_renderer.py:  470: printSegment: updates.
+   DEBUG: 2026-09-04 00:08:59,496:      pdf_renderer.py:  470: printSegment:  9 
+   DEBUG: 2026-09-04 00:08:59,498:      pdf_renderer.py:  470: printSegment: Stateful Connection Tracking
+   DEBUG: 2026-09-04 00:08:59,500:      pdf_renderer.py:  470: printSegment: : Full TCP handshake and flow lifecycle management in 
+   DEBUG: 2026-09-04 00:08:59,502:      pdf_renderer.py:  470: printSegment: conntrack_map
+   DEBUG: 2026-09-04 00:08:59,504:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:08:59,506:      pdf_renderer.py:  470: printSegment:  10 
+   DEBUG: 2026-09-04 00:08:59,508:      pdf_renderer.py:  470: printSegment: Userspace Control Tool (
+   DEBUG: 2026-09-04 00:08:59,510:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:08:59,512:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2026-09-04 00:08:59,516:      pdf_renderer.py:  470: printSegment: : Dynamic policy management, conntrack inspection,
+   DEBUG: 2026-09-04 00:08:59,518:      pdf_renderer.py:  470: printSegment: and telemetry.
+   DEBUG: 2026-09-04 00:08:59,520:      pdf_renderer.py:  470: printSegment:  11 
+   DEBUG: 2026-09-04 00:08:59,523:      pdf_renderer.py:  470: printSegment: Granular Statistics
+   DEBUG: 2026-09-04 00:08:59,528:      pdf_renderer.py:  470: printSegment: : Per-CPU line-rate counters for packets, drops, and flow states in 
+   DEBUG: 2026-09-04 00:08:59,532:      pdf_renderer.py:  470: printSegment: stats_map
+   DEBUG: 2026-09-04 00:08:59,536:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:08:59,540:      pdf_renderer.py:  470: printSegment:  12 
+   DEBUG: 2026-09-04 00:08:59,543:      pdf_renderer.py:  470: printSegment: Baseline Comparison
+   DEBUG: 2026-09-04 00:08:59,546:      pdf_renderer.py:  470: printSegment: : Standardized comparison against kernel 
+   DEBUG: 2026-09-04 00:08:59,550:      pdf_renderer.py:  470: printSegment: nftables
+   DEBUG: 2026-09-04 00:08:59,552:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:08:59,554:      pdf_renderer.py:  470: printSegment:  13 
+   DEBUG: 2026-09-04 00:08:59,556:      pdf_renderer.py:  470: printSegment: Traffic Generation
+   DEBUG: 2026-09-04 00:08:59,558:      pdf_renderer.py:  470: printSegment: : 
+   DEBUG: 2026-09-04 00:08:59,561:      pdf_renderer.py:  470: printSegment: iperf3
+   DEBUG: 2026-09-04 00:08:59,563:      pdf_renderer.py:  470: printSegment:  throughput, 
+   DEBUG: 2026-09-04 00:08:59,565:      pdf_renderer.py:  470: printSegment: ping
+   DEBUG: 2026-09-04 00:08:59,568:      pdf_renderer.py:  470: printSegment:  latency, and 
+   DEBUG: 2026-09-04 00:08:59,571:      pdf_renderer.py:  470: printSegment: hping3
+   DEBUG: 2026-09-04 00:08:59,574:      pdf_renderer.py:  470: printSegment:  attack simulations.
+   DEBUG: 2026-09-04 00:08:59,576:      pdf_renderer.py:  470: printSegment:  14 
+   DEBUG: 2026-09-04 00:08:59,578:      pdf_renderer.py:  470: printSegment: Test Suite
+   DEBUG: 2026-09-04 00:08:59,583:      pdf_renderer.py:  470: printSegment: : Automated verification of allowed traffic, blocked ports, state tracking, and unsolicited
+   DEBUG: 2026-09-04 00:08:59,586:      pdf_renderer.py:  470: printSegment: packet drops.
+   DEBUG: 2026-09-04 00:08:59,588:      pdf_renderer.py:  470: printSegment:  15 
+   DEBUG: 2026-09-04 00:08:59,590:      pdf_renderer.py:  470: printSegment: Packet Path Validation
+   DEBUG: 2026-09-04 00:08:59,594:      pdf_renderer.py:  470: printSegment: : Traced transit across veth pairs, bridges, XDP, and routing FIB.
+   DEBUG: 2026-09-04 00:08:59,596:      pdf_renderer.py:  470: printSegment:  16 
+   DEBUG: 2026-09-04 00:08:59,598:      pdf_renderer.py:  470: printSegment: Expandable Platform
+   DEBUG: 2026-09-04 00:08:59,601:      pdf_renderer.py:  470: printSegment: : Modular foundation for rate limiting, SYN cookies, and machine learning
+   DEBUG: 2026-09-04 00:08:59,603:      pdf_renderer.py:  470: printSegment: telemetry.
+   DEBUG: 2026-09-04 00:08:59,606:      pdf_renderer.py:  470: printSegment: 🚀 Quick Start
+   DEBUG: 2026-09-04 00:08:59,835:      pdf_renderer.py:  470: printSegment: 1. Install Dependencies 
+   DEBUG: 2026-09-04 00:08:59,837:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:08:59,838:      pdf_renderer.py:  470: printSegment:  Verify Environment (Step 1)
+   DEBUG: 2026-09-04 00:08:59,840:      pdf_renderer.py:  470: printSegment: bash scripts/setup.sh
+   DEBUG: 2026-09-04 00:08:59,842:      pdf_renderer.py:  470: printSegment: 2. Initialize Container Lab 
+   DEBUG: 2026-09-04 00:08:59,843:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:08:59,844:      pdf_renderer.py:  470: printSegment:  3 Networks (Steps 2 
+   DEBUG: 2026-09-04 00:08:59,845:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:08:59,845:      pdf_renderer.py:  470: printSegment:  3)
+   DEBUG: 2026-09-04 00:08:59,847:      pdf_renderer.py:  470: printSegment: bash scripts/setup_env.sh
+   DEBUG: 2026-09-04 00:08:59,848:      pdf_renderer.py:  470: printSegment: 3. Build eBPF Dataplane 
+   DEBUG: 2026-09-04 00:08:59,848:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:08:59,849:      pdf_renderer.py:  470: printSegment:  Userspace Utility
+   DEBUG: 2026-09-04 00:08:59,850:      pdf_renderer.py:  470: printSegment: make
+   DEBUG: 2026-09-04 00:08:59,851:      pdf_renderer.py:  470: printSegment: 4. Start the Stateful Firewall
+   DEBUG: 2026-09-04 00:08:59,853:      pdf_renderer.py:  470: printSegment: # Attach to the untrusted bridge interface
+   DEBUG: 2026-09-04 00:08:59,855:      pdf_renderer.py:  470: printSegment: sudo ./build/fw-ctl -i incus-untrust -m hybrid -d both
+   DEBUG: 2026-09-04 00:08:59,857:      pdf_renderer.py:  470: printSegment: 🛠️ CLI Management with 
+   DEBUG: 2026-09-04 00:09:00,075:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:00,077:      pdf_renderer.py:  470: printSegment:  (Step 10)
+   DEBUG: 2026-09-04 00:09:00,078:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:00,079:      pdf_renderer.py:  470: printSegment:  communicates directly with kernel eBPF maps:
+   DEBUG: 2026-09-04 00:09:00,081:      pdf_renderer.py:  470: printSegment: # View active rules
+   DEBUG: 2026-09-04 00:09:00,082:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule list
+   DEBUG: 2026-09-04 00:09:00,084:      pdf_renderer.py:  470: printSegment: # Add a rule to allow HTTP web traffic
+   DEBUG: 2026-09-04 00:09:00,087:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule add --proto tcp --dport 80 --action
+   DEBUG: 2026-09-04 00:09:00,088:      pdf_renderer.py:  470: printSegment: allow --desc "HTTP Web"
+   DEBUG: 2026-09-04 00:09:00,089:      pdf_renderer.py:  470: printSegment: # Add a rule to allow iperf3 benchmarks
+   DEBUG: 2026-09-04 00:09:00,093:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule add --proto tcp --dport 5201 --action
+   DEBUG: 2026-09-04 00:09:00,094:      pdf_renderer.py:  470: printSegment: allow --desc "iperf3"
+   DEBUG: 2026-09-04 00:09:00,095:      pdf_renderer.py:  470: printSegment: # Add a rule to allow ICMP ping
+   DEBUG: 2026-09-04 00:09:00,098:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule add --proto icmp --action allow
+   DEBUG: 2026-09-04 00:09:00,099:      pdf_renderer.py:  470: printSegment: --desc "Ping Echo"
+   DEBUG: 2026-09-04 00:09:00,100:      pdf_renderer.py:  470: printSegment: # Load rules from YAML configuration
+   DEBUG: 2026-09-04 00:09:00,102:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule load config/rules.yaml
+   DEBUG: 2026-09-04 00:09:00,103:      pdf_renderer.py:  470: printSegment: # Delete a rule by ID
+   DEBUG: 2026-09-04 00:09:00,105:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule del 1
+   DEBUG: 2026-09-04 00:09:00,106:      pdf_renderer.py:  470: printSegment: # Flush all active rules
+   DEBUG: 2026-09-04 00:09:00,107:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl rule flush
+   DEBUG: 2026-09-04 00:09:00,108:      pdf_renderer.py:  470: printSegment: # View active stateful connections
+   DEBUG: 2026-09-04 00:09:00,110:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl conntrack list
+   DEBUG: 2026-09-04 00:09:00,111:      pdf_renderer.py:  470: printSegment: # View firewall packet and drop statistics (Step 11)
+   DEBUG: 2026-09-04 00:09:00,113:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl stats show
+   DEBUG: 2026-09-04 00:09:00,114:      pdf_renderer.py:  470: printSegment: # Export statistics as JSON
+   DEBUG: 2026-09-04 00:09:00,116:      pdf_renderer.py:  470: printSegment: sudo ./build/firewallctl stats show --json
+   DEBUG: 2026-09-04 00:09:00,118:      pdf_renderer.py:  470: printSegment: 🧪 Testing 
+   DEBUG: 2026-09-04 00:09:00,397:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:00,399:      pdf_renderer.py:  470: printSegment:  Validation (Steps 12, 14, 15)
+   DEBUG: 2026-09-04 00:09:00,401:      pdf_renderer.py:  470: printSegment: Run the Step 14 Automated Test Suite
+   DEBUG: 2026-09-04 00:09:00,403:      pdf_renderer.py:  470: printSegment: bash test/run_all_tests.sh 10.10.2.10
+   DEBUG: 2026-09-04 00:09:00,405:      pdf_renderer.py:  470: printSegment: Verifies:
+   DEBUG: 2026-09-04 00:09:00,407:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,408:      pdf_renderer.py:  470: printSegment: ✅ Allowed HTTP 
+   DEBUG: 2026-09-04 00:09:00,432:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:00,433:      pdf_renderer.py:  470: printSegment:  ICMP traffic passes.
+   DEBUG: 2026-09-04 00:09:00,435:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,436:      pdf_renderer.py:  470: printSegment: ✅ Unauthorized ports (e.g. 8080) are dropped.
+   DEBUG: 2026-09-04 00:09:00,437:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,439:      pdf_renderer.py:  470: printSegment: ✅ Full TCP 3-way handshake is recorded statefully in 
+   DEBUG: 2026-09-04 00:09:00,441:      pdf_renderer.py:  470: printSegment: conntrack_map
+   DEBUG: 2026-09-04 00:09:00,443:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:00,444:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,446:      pdf_renderer.py:  470: printSegment: ✅ Unsolicited ACK/SYN-ACK packets with no state are dropped.
+   DEBUG: 2026-09-04 00:09:00,448:      pdf_renderer.py:  470: printSegment: Run the Step 12 Comparative Benchmark (nftables vs XDP)
+   DEBUG: 2026-09-04 00:09:00,451:      pdf_renderer.py:  470: printSegment: bash test/benchmark_baseline_nftables.sh 10.10.2.10
+   DEBUG: 2026-09-04 00:09:00,453:      pdf_renderer.py:  470: printSegment: Trace Packet Path (Step 15)
+   DEBUG: 2026-09-04 00:09:00,455:      pdf_renderer.py:  470: printSegment: bash scripts/trace_packet_path.sh
+   DEBUG: 2026-09-04 00:09:00,458:      pdf_renderer.py:  470: printSegment: 📂 Project Directory Structure
+   DEBUG: 2026-09-04 00:09:00,461:      pdf_renderer.py:  470: printSegment: ├── Makefile                   # Build automation for eBPF and
+   DEBUG: 2026-09-04 00:09:00,485:      pdf_renderer.py:  470: printSegment: userspace
+   DEBUG: 2026-09-04 00:09:00,487:      pdf_renderer.py:  470: printSegment: ├── Design.md                  # Comprehensive 16-step architectural
+   DEBUG: 2026-09-04 00:09:00,489:      pdf_renderer.py:  470: printSegment: design
+   DEBUG: 2026-09-04 00:09:00,491:      pdf_renderer.py:  470: printSegment: ├── README.md                  # User guide & operations manual
+   DEBUG: 2026-09-04 00:09:00,492:      pdf_renderer.py:  470: printSegment: ├── config/
+   DEBUG: 2026-09-04 00:09:00,494:      pdf_renderer.py:  470: printSegment: │   ├── firewall.yaml          # Global runtime parameters & interfaces
+   DEBUG: 2026-09-04 00:09:00,497:      pdf_renderer.py:  470: printSegment: │   └── rules.yaml             # Declarative firewall policy rules
+   DEBUG: 2026-09-04 00:09:00,498:      pdf_renderer.py:  470: printSegment: ├── docs/
+   DEBUG: 2026-09-04 00:09:00,500:      pdf_renderer.py:  470: printSegment: │   ├── PACKET_PATH_VALIDATION.md   # Step 15 packet path flow
+   DEBUG: 2026-09-04 00:09:00,502:      pdf_renderer.py:  470: printSegment: documentation
+   DEBUG: 2026-09-04 00:09:00,505:      pdf_renderer.py:  470: printSegment: │   └── ARCHITECTURE_AND_EXTENSIONS.md # Step 16 future platform
+   DEBUG: 2026-09-04 00:09:00,507:      pdf_renderer.py:  470: printSegment: extensions
+   DEBUG: 2026-09-04 00:09:00,508:      pdf_renderer.py:  470: printSegment: ├── include/
+   DEBUG: 2026-09-04 00:09:00,510:      pdf_renderer.py:  470: printSegment: │   ├── core/
+   DEBUG: 2026-09-04 00:09:00,513:      pdf_renderer.py:  470: printSegment: │   │   ├── constants.h        # Capacity limits, timeouts, and actions
+   DEBUG: 2026-09-04 00:09:00,516:      pdf_renderer.py:  470: printSegment: │   │   ├── types.h            # Telemetry events and shared types
+   DEBUG: 2026-09-04 00:09:00,519:      pdf_renderer.py:  470: printSegment: │   │   ├── stats.h            # Step 11 statistics counter definitions
+   DEBUG: 2026-09-04 00:09:00,522:      pdf_renderer.py:  470: printSegment: │   │   ├── rules.h            # Step 8 rule structure definitions
+   DEBUG: 2026-09-04 00:09:00,525:      pdf_renderer.py:  470: printSegment: │   │   └── conntrack.h        # Step 9 flow key and state structures
+   DEBUG: 2026-09-04 00:09:00,527:      pdf_renderer.py:  470: printSegment: │   └── protocols/
+   DEBUG: 2026-09-04 00:09:00,530:      pdf_renderer.py:  470: printSegment: │       └── icmp_types.h       # Protocol header definitions
+   DEBUG: 2026-09-04 00:09:00,532:      pdf_renderer.py:  470: printSegment: ├── src/
+   DEBUG: 2026-09-04 00:09:00,535:      pdf_renderer.py:  470: printSegment: │   ├── kernel/
+   DEBUG: 2026-09-04 00:09:00,541:      pdf_renderer.py:  470: printSegment: │   │   ├── main.bpf.c         # eBPF XDP/TC entrypoint and pipeline
+   DEBUG: 2026-09-04 00:09:00,544:      pdf_renderer.py:  470: printSegment: │   │   ├── core/
+   DEBUG: 2026-09-04 00:09:00,548:      pdf_renderer.py:  470: printSegment: │   │   │   ├── context.bpf.h  # Unified packet context
+   DEBUG: 2026-09-04 00:09:00,551:      pdf_renderer.py:  470: printSegment: │   │   │   ├── maps.bpf.h     # BPF maps (rules, conntrack, stats, events)
+   DEBUG: 2026-09-04 00:09:00,554:      pdf_renderer.py:  470: printSegment: │   │   │   ├── helpers.bpf.h  # Helper functions and ringbuf emission
+   DEBUG: 2026-09-04 00:09:00,557:      pdf_renderer.py:  470: printSegment: │   │   │   ├── rules.bpf.h    # Step 8 dynamic rule matching engine
+   DEBUG: 2026-09-04 00:09:00,560:      pdf_renderer.py:  470: printSegment: │   │   │   └── conntrack.bpf.h# Step 9 stateful TCP/UDP/ICMP engine
+   DEBUG: 2026-09-04 00:09:00,562:      pdf_renderer.py:  470: printSegment: │   │   └── protocols/         # L2/L3/L4 protocol parsers
+   DEBUG: 2026-09-04 00:09:00,564:      pdf_renderer.py:  470: printSegment: │   └── userspace/
+   DEBUG: 2026-09-04 00:09:00,567:      pdf_renderer.py:  470: printSegment: │       ├── main.c             # Firewall main entrypoint
+   DEBUG: 2026-09-04 00:09:00,569:      pdf_renderer.py:  470: printSegment: │       └── core/
+   DEBUG: 2026-09-04 00:09:00,571:      pdf_renderer.py:  470: printSegment: │           ├── bpf_loader.c   # BPF object loader & map pinning
+   DEBUG: 2026-09-04 00:09:00,573:      pdf_renderer.py:  470: printSegment: │           ├── cli.c          # firewallctl CLI argument parser
+   DEBUG: 2026-09-04 00:09:00,576:      pdf_renderer.py:  470: printSegment: │           ├── config.c       # YAML configuration parser
+   DEBUG: 2026-09-04 00:09:00,577:      pdf_renderer.py:  470: printSegment: │           ├── rules_mgr.c    # Step 8 rule manager
+   DEBUG: 2026-09-04 00:09:00,580:      pdf_renderer.py:  470: printSegment: │           ├── conntrack_mgr.c# Step 9 connection tracking manager
+   DEBUG: 2026-09-04 00:09:00,581:      pdf_renderer.py:  470: printSegment: │           └── stats_mgr.c    # Step 11 telemetry manager
+   DEBUG: 2026-09-04 00:09:00,582:      pdf_renderer.py:  470: printSegment: ├── scripts/
+   DEBUG: 2026-09-04 00:09:00,585:      pdf_renderer.py:  470: printSegment: │   ├── setup.sh               # Step 1 dependency installer (apt &
+   DEBUG: 2026-09-04 00:09:00,586:      pdf_renderer.py:  470: printSegment: dnf)
+   DEBUG: 2026-09-04 00:09:00,588:      pdf_renderer.py:  470: printSegment: │   ├── setup_env.sh           # Steps 2 & 3 Incus testbed provisioner
+   DEBUG: 2026-09-04 00:09:00,589:      pdf_renderer.py:  470: printSegment: │   ├── teardown_env.sh        # Testbed cleanup script
+   DEBUG: 2026-09-04 00:09:00,592:      pdf_renderer.py:  470: printSegment: │   └── trace_packet_path.sh   # Step 15 packet tracing utility
+   DEBUG: 2026-09-04 00:09:00,593:      pdf_renderer.py:  470: printSegment: └── test/
+   DEBUG: 2026-09-04 00:09:00,595:      pdf_renderer.py:  470: printSegment:     ├── run_all_tests.sh       # Step 14 automated test cases
+   DEBUG: 2026-09-04 00:09:00,597:      pdf_renderer.py:  470: printSegment:     ├── benchmark_baseline_nftables.sh # Step 12 nftables vs XDP
+   DEBUG: 2026-09-04 00:09:00,598:      pdf_renderer.py:  470: printSegment: benchmark
+   DEBUG: 2026-09-04 00:09:00,601:      pdf_renderer.py:  470: printSegment:     ├── traffic_attacker.sh    # Hostile traffic generator (SYN
+   DEBUG: 2026-09-04 00:09:00,602:      pdf_renderer.py:  470: printSegment: floods, scans)
+   DEBUG: 2026-09-04 00:09:00,603:      pdf_renderer.py:  470: printSegment:     ├── traffic_client.sh      # Legitimate client traffic simulator
+   DEBUG: 2026-09-04 00:09:00,605:      pdf_renderer.py:  470: printSegment:     └── traffic_server.sh      # Target server daemon starter
+   DEBUG: 2026-09-04 00:09:00,607:      pdf_renderer.py:  470: printSegment: 📚 Detailed Documentation
+   DEBUG: 2026-09-04 00:09:00,610:      pdf_renderer.py:  470: printSegment: For in-depth, professor-grade technical documentation covering every aspect of the project, refer to the 
+   DEBUG: 2026-09-04 00:09:00,612:      pdf_renderer.py:  470: printSegment: docs/
+   ERROR: 2026-09-04 00:09:00,613:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:194: docs/: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,613:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2026-09-04 00:09:00,613:      pdf_renderer.py:  470: printSegment: directory:
+   DEBUG: 2026-09-04 00:09:00,615:      pdf_renderer.py:  470: printSegment: | Document | Description |
+   DEBUG: 2026-09-04 00:09:00,616:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,617:      pdf_renderer.py:  470: printSegment: |----------|-------------|
+   DEBUG: 2026-09-04 00:09:00,618:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,619:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,620:      pdf_renderer.py:  470: printSegment: 00 — Documentation Index
+   ERROR: 2026-09-04 00:09:00,636:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/00_INDEX.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,638:      pdf_renderer.py:  470: printSegment:  | Master navigation index with project
+   DEBUG: 2026-09-04 00:09:00,640:      pdf_renderer.py:  470: printSegment: structure and architecture overview |
+   DEBUG: 2026-09-04 00:09:00,641:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,642:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,643:      pdf_renderer.py:  470: printSegment: 01 — Container Lab Setup
+   ERROR: 2026-09-04 00:09:00,644:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/01_CONTAINER_LAB_SETUP.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,647:      pdf_renderer.py:  470: printSegment:  | Incus container testbed, three-segment network
+   DEBUG: 2026-09-04 00:09:00,649:      pdf_renderer.py:  470: printSegment: topology, veth pairs, bridges |
+   DEBUG: 2026-09-04 00:09:00,650:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,651:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,653:      pdf_renderer.py:  470: printSegment: 02 — eBPF/XDP Dataplane
+   ERROR: 2026-09-04 00:09:00,654:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/02_EBPF_DATAPLANE.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,656:      pdf_renderer.py:  470: printSegment:  | Kernel fast-path pipeline: 4-stage processing, BPF maps,
+   DEBUG: 2026-09-04 00:09:00,658:      pdf_renderer.py:  470: printSegment: TCP state machine |
+   DEBUG: 2026-09-04 00:09:00,659:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,661:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,662:      pdf_renderer.py:  470: printSegment: 03 — Build Process
+   ERROR: 2026-09-04 00:09:00,663:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/03_BUILD_PROCESS.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,665:      pdf_renderer.py:  470: printSegment:  | Two-phase compilation (Clang BPF + GCC native), dependencies, Makefile
+   DEBUG: 2026-09-04 00:09:00,667:      pdf_renderer.py:  470: printSegment: targets |
+   DEBUG: 2026-09-04 00:09:00,668:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,669:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,671:      pdf_renderer.py:  470: printSegment: 04 — Userspace Control Plane
+   ERROR: 2026-09-04 00:09:00,672:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/04_USERSPACE_CONTROL_PLANE.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,672:      pdf_renderer.py:  470: printSegment:  | 
+   DEBUG: 2026-09-04 00:09:00,674:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:00,677:      pdf_renderer.py:  470: printSegment:  CLI reference, BPF loader lifecycle, configuration, map
+   DEBUG: 2026-09-04 00:09:00,678:      pdf_renderer.py:  470: printSegment: pinning |
+   DEBUG: 2026-09-04 00:09:00,680:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,681:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,682:      pdf_renderer.py:  470: printSegment: 05 — Testing 
+   DEBUG: 2026-09-04 00:09:00,684:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:00,685:      pdf_renderer.py:  470: printSegment:  Validation
+   ERROR: 2026-09-04 00:09:00,686:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/05_TESTING_AND_VALIDATION.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,687:      pdf_renderer.py:  470: printSegment:  | Automated test suite, nftables benchmark, traffic generation, attack simulation |
+   DEBUG: 2026-09-04 00:09:00,689:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,690:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,691:      pdf_renderer.py:  470: printSegment: 06 — Packet Path Validation
+   ERROR: 2026-09-04 00:09:00,693:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/PACKET_PATH_VALIDATION.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,694:      pdf_renderer.py:  470: printSegment:  | Six-stage packet transit lifecycle from container to container through XDP/TC hooks |
+   DEBUG: 2026-09-04 00:09:00,695:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:00,696:      pdf_renderer.py:  470: printSegment: | 
+   DEBUG: 2026-09-04 00:09:00,698:      pdf_renderer.py:  470: printSegment: 07 — Platform Extensions
+   ERROR: 2026-09-04 00:09:00,699:      pdf_renderer.py:  217: /home/Nishant/code/FirewallProgram/scripts/../docs/COMBINED_DOCUMENTATION.md:205: docs/ARCHITECTURE_AND_EXTENSIONS.md: No such file or directory
+   DEBUG: 2026-09-04 00:09:00,700:      pdf_renderer.py:  470: printSegment:  | Future modules: rate limiting, SYN cookies, adaptive blacklisting, ML telemetry |
+   DEBUG: 2026-09-04 00:09:00,702:      pdf_renderer.py:  470: printSegment: 🧹 Teardown
+   DEBUG: 2026-09-04 00:09:00,913:      pdf_renderer.py:  470: printSegment: To clean up all test containers and virtual network bridges:
+   DEBUG: 2026-09-04 00:09:00,915:      pdf_renderer.py:  470: printSegment: bash scripts/teardown_env.sh
+   DEBUG: 2026-09-04 00:09:00,917:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:09:00,918:      pdf_renderer.py:  470: printSegment: newpage
+   DEBUG: 2026-09-04 00:09:00,920:      pdf_renderer.py:  470: printSegment: Comprehensive Stateful eBPF/XDP Firewall Architecture 
+   DEBUG: 2026-09-04 00:09:00,922:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:00,924:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2026-09-04 00:09:00,924:      pdf_renderer.py:  470: printSegment: Implementation Guide
+   DEBUG: 2026-09-04 00:09:00,926:      pdf_renderer.py:  470: printSegment: 1. Overview 
+   DEBUG: 2026-09-04 00:09:00,927:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:00,928:      pdf_renderer.py:  470: printSegment:  Core Philosophy
+   DEBUG: 2026-09-04 00:09:00,931:      pdf_renderer.py:  470: printSegment: This project implements a high-performance, kernel-native stateful firewall using 
+   DEBUG: 2026-09-04 00:09:00,933:      pdf_renderer.py:  470: printSegment: eBPF (Extended Berkeley
+   DEBUG: 2026-09-04 00:09:00,934:      pdf_renderer.py:  470: printSegment: Packet Filter)
+   DEBUG: 2026-09-04 00:09:00,935:      pdf_renderer.py:  470: printSegment:  and 
+   DEBUG: 2026-09-04 00:09:00,937:      pdf_renderer.py:  470: printSegment: XDP (eXpress Data Path)
+   DEBUG: 2026-09-04 00:09:00,959:      pdf_renderer.py:  470: printSegment:  on Linux. The system provides sub-microsecond packet
+   DEBUG: 2026-09-04 00:09:00,965:      pdf_renderer.py:  470: printSegment: classification, line-rate throughput, stateful TCP/UDP/ICMP flow tracking, and dynamic rule management from
+   DEBUG: 2026-09-04 00:09:00,966:      pdf_renderer.py:  470: printSegment: userspace without kernel recompilation.
+   DEBUG: 2026-09-04 00:09:00,968:      pdf_renderer.py:  470: printSegment: The architecture strictly follows a 
+   DEBUG: 2026-09-04 00:09:00,969:      pdf_renderer.py:  470: printSegment: split dataplane/control-plane model
+   DEBUG: 2026-09-04 00:09:00,970:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2026-09-04 00:09:00,971:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,973:      pdf_renderer.py:  470: printSegment: Kernel Dataplane (eBPF/XDP)
+   DEBUG: 2026-09-04 00:09:00,977:      pdf_renderer.py:  470: printSegment: : Fast-path packet parsing, state validation, rule matching, and
+   DEBUG: 2026-09-04 00:09:00,978:      pdf_renderer.py:  470: printSegment: line-rate enforcement (
+   DEBUG: 2026-09-04 00:09:00,980:      pdf_renderer.py:  470: printSegment: XDP_PASS
+   DEBUG: 2026-09-04 00:09:00,981:      pdf_renderer.py:  470: printSegment:  / 
+   DEBUG: 2026-09-04 00:09:00,982:      pdf_renderer.py:  470: printSegment: XDP_DROP
+   DEBUG: 2026-09-04 00:09:00,983:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:09:00,984:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:00,986:      pdf_renderer.py:  470: printSegment: Userspace Control Plane (
+   DEBUG: 2026-09-04 00:09:00,987:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:00,988:      pdf_renderer.py:  470: printSegment:  / 
+   DEBUG: 2026-09-04 00:09:00,989:      pdf_renderer.py:  470: printSegment: fw-ctl
+   DEBUG: 2026-09-04 00:09:00,990:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2026-09-04 00:09:00,994:      pdf_renderer.py:  470: printSegment: : Rule configuration, connection state
+   DEBUG: 2026-09-04 00:09:00,996:      pdf_renderer.py:  470: printSegment: inspection, telemetry aggregation, and lifecycle management.
+   DEBUG: 2026-09-04 00:09:00,998:      pdf_renderer.py:  470: printSegment: 2. The 16-Step Design 
+   DEBUG: 2026-09-04 00:09:00,999:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:01,001:      pdf_renderer.py:  470: printSegment:  Architecture Blueprint
+   DEBUG: 2026-09-04 00:09:01,003:      pdf_renderer.py:  470: printSegment: +----------------------------------------------------------------------------------------------------+
+   DEBUG: 2026-09-04 00:09:01,019:      pdf_renderer.py:  470: printSegment: |                                      LINUX HOST (Step 1 & Step 4)
+   DEBUG: 2026-09-04 00:09:01,021:      pdf_renderer.py:  470: printSegment:                                   |
+   DEBUG: 2026-09-04 00:09:01,035:      pdf_renderer.py:  470: printSegment: |                                                                  
+   DEBUG: 2026-09-04 00:09:01,036:      pdf_renderer.py:  470: printSegment:                                  |
+   DEBUG: 2026-09-04 00:09:01,039:      pdf_renderer.py:  470: printSegment: |  +---------------------------------------------------+   
+   DEBUG: 2026-09-04 00:09:01,041:      pdf_renderer.py:  470: printSegment: +-------------------------------------+  |
+   DEBUG: 2026-09-04 00:09:01,047:      pdf_renderer.py:  470: printSegment: |  |           UNTRUSTED NETWORK (Step 3)              |    |      
+   DEBUG: 2026-09-04 00:09:01,049:      pdf_renderer.py:  470: printSegment: PROTECTED NETWORK (Step 3)    |  |
+   DEBUG: 2026-09-04 00:09:01,057:      pdf_renderer.py:  470: printSegment: |  |           Subnet: 10.10.1.0/24                    |    |      
+   DEBUG: 2026-09-04 00:09:01,058:      pdf_renderer.py:  470: printSegment: Subnet: 10.10.2.0/24          |  |
+   DEBUG: 2026-09-04 00:09:01,062:      pdf_renderer.py:  470: printSegment: |  |  +-----------------------+ +--------------------+ |    | 
+   DEBUG: 2026-09-04 00:09:01,064:      pdf_renderer.py:  470: printSegment: +-------------------------------+  |  |
+   DEBUG: 2026-09-04 00:09:01,072:      pdf_renderer.py:  470: printSegment: |  |  |   Client Container    | | Attacker Container | |    |  |   
+   DEBUG: 2026-09-04 00:09:01,074:      pdf_renderer.py:  470: printSegment:   Webserver Container      |  |  |
+   DEBUG: 2026-09-04 00:09:01,086:      pdf_renderer.py:  470: printSegment: |  |  |    (10.10.1.20)       | |   (10.10.1.10)     | |    |  |   
+   DEBUG: 2026-09-04 00:09:01,088:      pdf_renderer.py:  470: printSegment:       (10.10.2.10)         |  |  |
+   DEBUG: 2026-09-04 00:09:01,095:      pdf_renderer.py:  470: printSegment: |  |  |   Legitimate Traffic  | |  Floods & Scans    | |    |  |   
+   DEBUG: 2026-09-04 00:09:01,096:      pdf_renderer.py:  470: printSegment: Nginx (80), iperf3 (5201)  |  |  |
+   DEBUG: 2026-09-04 00:09:01,100:      pdf_renderer.py:  470: printSegment: |  |  +-----------+-----------+ +---------+----------+ |    | 
+   DEBUG: 2026-09-04 00:09:01,102:      pdf_renderer.py:  470: printSegment: +---------------+---------------+  |  |
+   DEBUG: 2026-09-04 00:09:01,105:      pdf_renderer.py:  470: printSegment: |  +--------------|-----------------------|------------+   
+   DEBUG: 2026-09-04 00:09:01,107:      pdf_renderer.py:  470: printSegment: +------------------|------------------+  |
+   DEBUG: 2026-09-04 00:09:01,121:      pdf_renderer.py:  470: printSegment: |                 +-----------+-----------+                        
+   DEBUG: 2026-09-04 00:09:01,123:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,134:      pdf_renderer.py:  470: printSegment: |                             | (veth pair)                        
+   DEBUG: 2026-09-04 00:09:01,135:      pdf_renderer.py:  470: printSegment:            | (veth pair)         |
+   DEBUG: 2026-09-04 00:09:01,151:      pdf_renderer.py:  470: printSegment: |                             v                                    
+   DEBUG: 2026-09-04 00:09:01,153:      pdf_renderer.py:  470: printSegment:            v                     |
+   DEBUG: 2026-09-04 00:09:01,159:      pdf_renderer.py:  470: printSegment: |               +----------------------------+                 
+   DEBUG: 2026-09-04 00:09:01,161:      pdf_renderer.py:  470: printSegment: +----------------------------+       |
+   DEBUG: 2026-09-04 00:09:01,169:      pdf_renderer.py:  470: printSegment: |               |  Bridge: incus-untrust     |                  |  
+   DEBUG: 2026-09-04 00:09:01,170:      pdf_renderer.py:  470: printSegment: Bridge: incus-protect    |       |
+   DEBUG: 2026-09-04 00:09:01,181:      pdf_renderer.py:  470: printSegment: |               |  IP: 10.10.1.1/24          |                  |  
+   DEBUG: 2026-09-04 00:09:01,183:      pdf_renderer.py:  470: printSegment: IP: 10.10.2.1/24         |       |
+   DEBUG: 2026-09-04 00:09:01,188:      pdf_renderer.py:  470: printSegment: |               +--------------+-------------+                 
+   DEBUG: 2026-09-04 00:09:01,190:      pdf_renderer.py:  470: printSegment: +--------------+-------------+       |
+   DEBUG: 2026-09-04 00:09:01,205:      pdf_renderer.py:  470: printSegment: |                              |                                   
+   DEBUG: 2026-09-04 00:09:01,207:      pdf_renderer.py:  470: printSegment:            ^                     |
+   DEBUG: 2026-09-04 00:09:01,221:      pdf_renderer.py:  470: printSegment: |                              v                                   
+   DEBUG: 2026-09-04 00:09:01,222:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,237:      pdf_renderer.py:  470: printSegment: |                 +----------------------------+                   
+   DEBUG: 2026-09-04 00:09:01,238:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,255:      pdf_renderer.py:  470: printSegment: |                 |  XDP Ingress Hook (Step 5) |                   
+   DEBUG: 2026-09-04 00:09:01,256:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,271:      pdf_renderer.py:  470: printSegment: |                 +--------------+-------------+                   
+   DEBUG: 2026-09-04 00:09:01,272:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,289:      pdf_renderer.py:  470: printSegment: |                                |                                 
+   DEBUG: 2026-09-04 00:09:01,291:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,305:      pdf_renderer.py:  470: printSegment: |                                v                                 
+   DEBUG: 2026-09-04 00:09:01,307:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,321:      pdf_renderer.py:  470: printSegment: |         +---------------------------------------------+          
+   DEBUG: 2026-09-04 00:09:01,322:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,337:      pdf_renderer.py:  470: printSegment: |         |  eBPF 4-Stage Firewall Pipeline (Step 6)    |          
+   DEBUG: 2026-09-04 00:09:01,338:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,362:      pdf_renderer.py:  470: printSegment: |         |   1. 5-Tuple Packet Parser (Step 7)         |          
+   DEBUG: 2026-09-04 00:09:01,364:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,382:      pdf_renderer.py:  470: printSegment: |         |   2. Stateful Connection Engine (Step 9)    |          
+   DEBUG: 2026-09-04 00:09:01,384:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,400:      pdf_renderer.py:  470: printSegment: |         |   3. Dynamic Rule Matcher (Step 8)          |          
+   DEBUG: 2026-09-04 00:09:01,401:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,419:      pdf_renderer.py:  470: printSegment: |         |   4. Telemetry & Stats Counters (Step 11)   |          
+   DEBUG: 2026-09-04 00:09:01,420:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,437:      pdf_renderer.py:  470: printSegment: |         +----------------------+----------------------+          
+   DEBUG: 2026-09-04 00:09:01,439:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,458:      pdf_renderer.py:  470: printSegment: |                                |                                 
+   DEBUG: 2026-09-04 00:09:01,460:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,478:      pdf_renderer.py:  470: printSegment: |                 +--------------+--------------+                  
+   DEBUG: 2026-09-04 00:09:01,479:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,496:      pdf_renderer.py:  470: printSegment: |                 |                             |                  
+   DEBUG: 2026-09-04 00:09:01,498:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,513:      pdf_renderer.py:  470: printSegment: |           [ XDP_DROP ]                  [ XDP_PASS ]             
+   DEBUG: 2026-09-04 00:09:01,514:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,529:      pdf_renderer.py:  470: printSegment: |        (Attacks / Out-of-State)               |                  
+   DEBUG: 2026-09-04 00:09:01,530:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,546:      pdf_renderer.py:  470: printSegment: |                                               v                  
+   DEBUG: 2026-09-04 00:09:01,548:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,564:      pdf_renderer.py:  470: printSegment: |                               +-------------------------------+  
+   DEBUG: 2026-09-04 00:09:01,566:      pdf_renderer.py:  470: printSegment:            |                     |
+   DEBUG: 2026-09-04 00:09:01,580:      pdf_renderer.py:  470: printSegment: |                               | Host IPv4 Routing Plane (FIB)
+   DEBUG: 2026-09-04 00:09:01,581:      pdf_renderer.py:  470: printSegment: |--------------+                     |
+   DEBUG: 2026-09-04 00:09:01,597:      pdf_renderer.py:  470: printSegment: |                               |  (net.ipv4.ip_forward = 1)    |  
+   DEBUG: 2026-09-04 00:09:01,598:      pdf_renderer.py:  470: printSegment:                                  |
+   DEBUG: 2026-09-04 00:09:01,613:      pdf_renderer.py:  470: printSegment: |                               +-------------------------------+  
+   DEBUG: 2026-09-04 00:09:01,614:      pdf_renderer.py:  470: printSegment:                                  |
+   DEBUG: 2026-09-04 00:09:01,616:      pdf_renderer.py:  470: printSegment: +----------------------------------------------------------------------------------------------------+
+   DEBUG: 2026-09-04 00:09:01,618:      pdf_renderer.py:  470: printSegment: Step 1: Set up one Linux machine as the host
+   DEBUG: 2026-09-04 00:09:01,620:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,622:      pdf_renderer.py:  470: printSegment: All components, virtual network bridges, containers, and kernel hooks run on a single host.
+   DEBUG: 2026-09-04 00:09:01,623:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,624:      pdf_renderer.py:  470: printSegment: Host requirements: Linux Kernel >= 5.15 with BTF support (
+   DEBUG: 2026-09-04 00:09:01,625:      pdf_renderer.py:  470: printSegment: /sys/kernel/btf/vmlinux
+   DEBUG: 2026-09-04 00:09:01,627:      pdf_renderer.py:  470: printSegment: ),
+   DEBUG: 2026-09-04 00:09:01,628:      pdf_renderer.py:  470: printSegment: Clang/LLVM toolchain, and 
+   DEBUG: 2026-09-04 00:09:01,630:      pdf_renderer.py:  470: printSegment: ip_forward=1
+   DEBUG: 2026-09-04 00:09:01,632:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,634:      pdf_renderer.py:  470: printSegment: Step 2: Create virtual machines/containers using Incus
+   DEBUG: 2026-09-04 00:09:01,636:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,650:      pdf_renderer.py:  470: printSegment: Incus provisions lightweight system containers that provide isolated network namespaces and
+   DEBUG: 2026-09-04 00:09:01,653:      pdf_renderer.py:  470: printSegment: individual IP addresses without the virtualization overhead of full virtual machines.
+   DEBUG: 2026-09-04 00:09:01,654:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,656:      pdf_renderer.py:  470: printSegment: Containers: 
+   DEBUG: 2026-09-04 00:09:01,657:      pdf_renderer.py:  470: printSegment: client
+   DEBUG: 2026-09-04 00:09:01,659:      pdf_renderer.py:  470: printSegment:  (10.10.1.20), 
+   DEBUG: 2026-09-04 00:09:01,660:      pdf_renderer.py:  470: printSegment: attacker
+   DEBUG: 2026-09-04 00:09:01,661:      pdf_renderer.py:  470: printSegment:  (10.10.1.10), 
+   DEBUG: 2026-09-04 00:09:01,663:      pdf_renderer.py:  470: printSegment: webserver
+   DEBUG: 2026-09-04 00:09:01,664:      pdf_renderer.py:  470: printSegment:  (10.10.2.10), 
+   DEBUG: 2026-09-04 00:09:01,666:      pdf_renderer.py:  470: printSegment: admin
+   DEBUG: 2026-09-04 00:09:01,668:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2026-09-04 00:09:01,669:      pdf_renderer.py:  470: printSegment: (10.10.99.10).
+   DEBUG: 2026-09-04 00:09:01,671:      pdf_renderer.py:  470: printSegment: Step 3: Organise containers into three networks
+   DEBUG: 2026-09-04 00:09:01,672:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,674:      pdf_renderer.py:  470: printSegment: Untrusted Segment (
+   DEBUG: 2026-09-04 00:09:01,677:      pdf_renderer.py:  470: printSegment: incus-untrust
+   DEBUG: 2026-09-04 00:09:01,678:      pdf_renderer.py:  470: printSegment:  - 10.10.1.0/24)
+   DEBUG: 2026-09-04 00:09:01,680:      pdf_renderer.py:  470: printSegment: : Houses clients and the attacker simulator.
+   DEBUG: 2026-09-04 00:09:01,682:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,684:      pdf_renderer.py:  470: printSegment: Protected Segment (
+   DEBUG: 2026-09-04 00:09:01,685:      pdf_renderer.py:  470: printSegment: incus-protect
+   DEBUG: 2026-09-04 00:09:01,687:      pdf_renderer.py:  470: printSegment:  - 10.10.2.0/24)
+   DEBUG: 2026-09-04 00:09:01,689:      pdf_renderer.py:  470: printSegment: : Houses target services (Nginx, backend
+   DEBUG: 2026-09-04 00:09:01,691:      pdf_renderer.py:  470: printSegment: applications).
+   DEBUG: 2026-09-04 00:09:01,693:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,695:      pdf_renderer.py:  470: printSegment: Management Segment (
+   DEBUG: 2026-09-04 00:09:01,696:      pdf_renderer.py:  470: printSegment: incus-mgmt
+   DEBUG: 2026-09-04 00:09:01,698:      pdf_renderer.py:  470: printSegment:  - 10.10.99.0/24)
+   DEBUG: 2026-09-04 00:09:01,705:      pdf_renderer.py:  470: printSegment: : Isolated network for administration and
+   DEBUG: 2026-09-04 00:09:01,707:      pdf_renderer.py:  470: printSegment: monitoring to prevent operator lockout during aggressive firewall policy tests.
+   DEBUG: 2026-09-04 00:09:01,709:      pdf_renderer.py:  470: printSegment: Step 4: Connect networks through the Linux host, not through a container
+   DEBUG: 2026-09-04 00:09:01,710:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,712:      pdf_renderer.py:  470: printSegment: Container networks are joined on the host via bridge interfaces and 
+   DEBUG: 2026-09-04 00:09:01,713:      pdf_renderer.py:  470: printSegment: veth
+   DEBUG: 2026-09-04 00:09:01,714:      pdf_renderer.py:  470: printSegment:  pairs.
+   DEBUG: 2026-09-04 00:09:01,715:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,716:      pdf_renderer.py:  470: printSegment: The host routing engine (
+   DEBUG: 2026-09-04 00:09:01,717:      pdf_renderer.py:  470: printSegment: net.ipv4.ip_forward = 1
+   DEBUG: 2026-09-04 00:09:01,719:      pdf_renderer.py:  470: printSegment: ) routes traffic across subnets.
+   DEBUG: 2026-09-04 00:09:01,720:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,723:      pdf_renderer.py:  470: printSegment: The firewall attaches directly to this forwarding path on the host, operating at the bare-metal kernel
+   DEBUG: 2026-09-04 00:09:01,725:      pdf_renderer.py:  470: printSegment: driver layer.
+   DEBUG: 2026-09-04 00:09:01,726:      pdf_renderer.py:  470: printSegment: Step 5: Attach the firewall using XDP
+   DEBUG: 2026-09-04 00:09:01,727:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,729:      pdf_renderer.py:  470: printSegment: The XDP hook (
+   DEBUG: 2026-09-04 00:09:01,730:      pdf_renderer.py:  470: printSegment: xdp_firewall_prog
+   DEBUG: 2026-09-04 00:09:01,736:      pdf_renderer.py:  470: printSegment: ) intercepts incoming packets at the network device driver
+   DEBUG: 2026-09-04 00:09:01,738:      pdf_renderer.py:  470: printSegment: layer (or generic SKB fallback) prior to 
+   DEBUG: 2026-09-04 00:09:01,739:      pdf_renderer.py:  470: printSegment: sk_buff
+   DEBUG: 2026-09-04 00:09:01,745:      pdf_renderer.py:  470: printSegment:  allocation or netfilter traversal, saving up to 90%
+   DEBUG: 2026-09-04 00:09:01,746:      pdf_renderer.py:  470: printSegment: of kernel CPU overhead during high packet loads.
+   DEBUG: 2026-09-04 00:09:01,748:      pdf_renderer.py:  470: printSegment: Step 6: Write the firewall logic in eBPF
+   DEBUG: 2026-09-04 00:09:01,750:      pdf_renderer.py:  470: printSegment: The kernel fast-path executes a four-stage pipeline:
+   DEBUG: 2026-09-04 00:09:01,751:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2026-09-04 00:09:01,753:      pdf_renderer.py:  470: printSegment: Parser
+   DEBUG: 2026-09-04 00:09:01,754:      pdf_renderer.py:  470: printSegment: : Validates Ethernet, IPv4, TCP/UDP/ICMP headers.
+   DEBUG: 2026-09-04 00:09:01,756:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2026-09-04 00:09:01,757:      pdf_renderer.py:  470: printSegment: State Engine
+   DEBUG: 2026-09-04 00:09:01,759:      pdf_renderer.py:  470: printSegment: : Validates connection state (TCP handshake, sequence tracking, UDP flow activity).
+   DEBUG: 2026-09-04 00:09:01,761:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2026-09-04 00:09:01,762:      pdf_renderer.py:  470: printSegment: Rule Engine
+   DEBUG: 2026-09-04 00:09:01,764:      pdf_renderer.py:  470: printSegment: : Evaluates user-defined policies for initial connection establishment.
+   DEBUG: 2026-09-04 00:09:01,765:      pdf_renderer.py:  470: printSegment:  4 
+   DEBUG: 2026-09-04 00:09:01,767:      pdf_renderer.py:  470: printSegment: Decision 
+   DEBUG: 2026-09-04 00:09:01,768:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:01,770:      pdf_renderer.py:  470: printSegment:  Telemetry Engine
+   DEBUG: 2026-09-04 00:09:01,771:      pdf_renderer.py:  470: printSegment: : Returns 
+   DEBUG: 2026-09-04 00:09:01,772:      pdf_renderer.py:  470: printSegment: XDP_PASS
+   DEBUG: 2026-09-04 00:09:01,774:      pdf_renderer.py:  470: printSegment:  or 
+   DEBUG: 2026-09-04 00:09:01,775:      pdf_renderer.py:  470: printSegment: XDP_DROP
+   DEBUG: 2026-09-04 00:09:01,778:      pdf_renderer.py:  470: printSegment:  and emits telemetry events to
+   DEBUG: 2026-09-04 00:09:01,780:      pdf_renderer.py:  470: printSegment: the BPF ring buffer.
+   DEBUG: 2026-09-04 00:09:01,782:      pdf_renderer.py:  470: printSegment: Step 7: Parse each packet into its five identifying fields
+   DEBUG: 2026-09-04 00:09:01,784:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,786:      pdf_renderer.py:  470: printSegment: For every packet, extracts: 
+   DEBUG: 2026-09-04 00:09:01,787:      pdf_renderer.py:  470: printSegment: src_ip
+   DEBUG: 2026-09-04 00:09:01,789:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,790:      pdf_renderer.py:  470: printSegment: dst_ip
+   DEBUG: 2026-09-04 00:09:01,792:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,793:      pdf_renderer.py:  470: printSegment: src_port
+   DEBUG: 2026-09-04 00:09:01,795:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,796:      pdf_renderer.py:  470: printSegment: dst_port
+   DEBUG: 2026-09-04 00:09:01,798:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,799:      pdf_renderer.py:  470: printSegment: proto
+   DEBUG: 2026-09-04 00:09:01,801:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,802:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,804:      pdf_renderer.py:  470: printSegment: Validates TCP control flags (
+   DEBUG: 2026-09-04 00:09:01,805:      pdf_renderer.py:  470: printSegment: SYN
+   DEBUG: 2026-09-04 00:09:01,807:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,808:      pdf_renderer.py:  470: printSegment: ACK
+   DEBUG: 2026-09-04 00:09:01,810:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,812:      pdf_renderer.py:  470: printSegment: FIN
+   DEBUG: 2026-09-04 00:09:01,813:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,815:      pdf_renderer.py:  470: printSegment: RST
+   DEBUG: 2026-09-04 00:09:01,816:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,818:      pdf_renderer.py:  470: printSegment: PSH
+   DEBUG: 2026-09-04 00:09:01,820:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,821:      pdf_renderer.py:  470: printSegment: URG
+   DEBUG: 2026-09-04 00:09:01,823:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:09:01,825:      pdf_renderer.py:  470: printSegment: Step 8: Keep firewall rules outside the eBPF program
+   DEBUG: 2026-09-04 00:09:01,827:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,829:      pdf_renderer.py:  470: printSegment: Rules are stored in a dedicated 
+   DEBUG: 2026-09-04 00:09:01,831:      pdf_renderer.py:  470: printSegment: BPF_MAP_TYPE_ARRAY
+   DEBUG: 2026-09-04 00:09:01,832:      pdf_renderer.py:  470: printSegment:  (
+   DEBUG: 2026-09-04 00:09:01,834:      pdf_renderer.py:  470: printSegment: rules_map
+   DEBUG: 2026-09-04 00:09:01,836:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:09:01,837:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,840:      pdf_renderer.py:  470: printSegment: Each entry defines subnet masks, port ranges, protocol filters, actions (
+   DEBUG: 2026-09-04 00:09:01,842:      pdf_renderer.py:  470: printSegment: ALLOW
+   DEBUG: 2026-09-04 00:09:01,843:      pdf_renderer.py:  470: printSegment: , 
+   DEBUG: 2026-09-04 00:09:01,845:      pdf_renderer.py:  470: printSegment: DROP
+   DEBUG: 2026-09-04 00:09:01,847:      pdf_renderer.py:  470: printSegment: ), and hit
+   DEBUG: 2026-09-04 00:09:01,849:      pdf_renderer.py:  470: printSegment: counters.
+   DEBUG: 2026-09-04 00:09:01,850:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,852:      pdf_renderer.py:  470: printSegment: Rules can be updated dynamically via 
+   DEBUG: 2026-09-04 00:09:01,853:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:01,855:      pdf_renderer.py:  470: printSegment:  without rebuilding or reloading the eBPF
+   DEBUG: 2026-09-04 00:09:01,856:      pdf_renderer.py:  470: printSegment: kernel program.
+   DEBUG: 2026-09-04 00:09:01,858:      pdf_renderer.py:  470: printSegment: Step 9: Add connection state to make it a stateful firewall
+   DEBUG: 2026-09-04 00:09:01,859:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,860:      pdf_renderer.py:  470: printSegment: Flow states are tracked in 
+   DEBUG: 2026-09-04 00:09:01,862:      pdf_renderer.py:  470: printSegment: conntrack_map
+   DEBUG: 2026-09-04 00:09:01,862:      pdf_renderer.py:  470: printSegment:  (
+   DEBUG: 2026-09-04 00:09:01,863:      pdf_renderer.py:  470: printSegment: BPF_MAP_TYPE_HASH
+   DEBUG: 2026-09-04 00:09:01,864:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:09:01,865:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,866:      pdf_renderer.py:  470: printSegment: TCP State Machine
+   DEBUG: 2026-09-04 00:09:01,868:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2026-09-04 00:09:01,869:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,870:      pdf_renderer.py:  470: printSegment: SYN
+   DEBUG: 2026-09-04 00:09:01,871:      pdf_renderer.py:  470: printSegment:  (new flow allowed by rule) -> 
+   DEBUG: 2026-09-04 00:09:01,873:      pdf_renderer.py:  470: printSegment: CONN_STATE_SYN_SENT
+   DEBUG: 2026-09-04 00:09:01,874:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,875:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,876:      pdf_renderer.py:  470: printSegment: SYN-ACK
+   DEBUG: 2026-09-04 00:09:01,877:      pdf_renderer.py:  470: printSegment:  (from server) -> 
+   DEBUG: 2026-09-04 00:09:01,879:      pdf_renderer.py:  470: printSegment: CONN_STATE_SYN_RECV
+   DEBUG: 2026-09-04 00:09:01,880:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,881:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,882:      pdf_renderer.py:  470: printSegment: ACK
+   DEBUG: 2026-09-04 00:09:01,883:      pdf_renderer.py:  470: printSegment:  (handshake complete) -> 
+   DEBUG: 2026-09-04 00:09:01,884:      pdf_renderer.py:  470: printSegment: CONN_STATE_ESTABLISHED
+   DEBUG: 2026-09-04 00:09:01,886:      pdf_renderer.py:  470: printSegment:  (Fast-path allow).
+   DEBUG: 2026-09-04 00:09:01,887:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,888:      pdf_renderer.py:  470: printSegment: FIN
+   DEBUG: 2026-09-04 00:09:01,889:      pdf_renderer.py:  470: printSegment:  / 
+   DEBUG: 2026-09-04 00:09:01,890:      pdf_renderer.py:  470: printSegment: RST
+   DEBUG: 2026-09-04 00:09:01,891:      pdf_renderer.py:  470: printSegment:  -> 
+   DEBUG: 2026-09-04 00:09:01,892:      pdf_renderer.py:  470: printSegment: CONN_STATE_FIN_WAIT
+   DEBUG: 2026-09-04 00:09:01,893:      pdf_renderer.py:  470: printSegment:  / 
+   DEBUG: 2026-09-04 00:09:01,895:      pdf_renderer.py:  470: printSegment: CONN_STATE_CLOSED
+   DEBUG: 2026-09-04 00:09:01,896:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,897:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,898:      pdf_renderer.py:  470: printSegment: Unsolicited out-of-state packets
+   DEBUG: 2026-09-04 00:09:01,901:      pdf_renderer.py:  470: printSegment:  (e.g. non-SYN packets with no prior state) are
+   DEBUG: 2026-09-04 00:09:01,902:      pdf_renderer.py:  470: printSegment: dropped immediately (
+   DEBUG: 2026-09-04 00:09:01,903:      pdf_renderer.py:  470: printSegment: XDP_DROP
+   DEBUG: 2026-09-04 00:09:01,905:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2026-09-04 00:09:01,906:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,907:      pdf_renderer.py:  470: printSegment: UDP 
+   DEBUG: 2026-09-04 00:09:01,908:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:01,909:      pdf_renderer.py:  470: printSegment:  ICMP
+   DEBUG: 2026-09-04 00:09:01,911:      pdf_renderer.py:  470: printSegment: : Pseudo-connection state tracking with automatic inactivity timeouts.
+   DEBUG: 2026-09-04 00:09:01,913:      pdf_renderer.py:  470: printSegment: Step 10: Build the userspace control tool (
+   DEBUG: 2026-09-04 00:09:01,914:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:01,915:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2026-09-04 00:09:01,916:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,917:      pdf_renderer.py:  470: printSegment: firewallctl
+   DEBUG: 2026-09-04 00:09:01,919:      pdf_renderer.py:  470: printSegment:  interacts with BPF maps via 
+   DEBUG: 2026-09-04 00:09:01,920:      pdf_renderer.py:  470: printSegment: libbpf
+   DEBUG: 2026-09-04 00:09:01,921:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2026-09-04 00:09:01,922:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,924:      pdf_renderer.py:  470: printSegment: firewallctl rule add / del / list / flush / load
+   DEBUG: 2026-09-04 00:09:01,925:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,926:      pdf_renderer.py:  470: printSegment: firewallctl conntrack list / flush
+   DEBUG: 2026-09-04 00:09:01,928:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,929:      pdf_renderer.py:  470: printSegment: firewallctl stats show / reset
+   DEBUG: 2026-09-04 00:09:01,930:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,931:      pdf_renderer.py:  470: printSegment: firewallctl monitor
+   DEBUG: 2026-09-04 00:09:01,933:      pdf_renderer.py:  470: printSegment: Step 11: Collect granular statistics
+   DEBUG: 2026-09-04 00:09:01,934:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,935:      pdf_renderer.py:  470: printSegment: stats_map
+   DEBUG: 2026-09-04 00:09:01,936:      pdf_renderer.py:  470: printSegment:  (
+   DEBUG: 2026-09-04 00:09:01,938:      pdf_renderer.py:  470: printSegment: BPF_MAP_TYPE_PERCPU_ARRAY
+   DEBUG: 2026-09-04 00:09:01,939:      pdf_renderer.py:  470: printSegment: ) maintains line-rate per-CPU counters:
+   DEBUG: 2026-09-04 00:09:01,941:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,942:      pdf_renderer.py:  470: printSegment: Total packets received, allowed, and dropped.
+   DEBUG: 2026-09-04 00:09:01,943:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,945:      pdf_renderer.py:  470: printSegment: Breakdown by protocol: TCP, UDP, ICMP, Other.
+   DEBUG: 2026-09-04 00:09:01,947:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,949:      pdf_renderer.py:  470: printSegment: Drop classifications: policy drop, unsolicited/out-of-state drop, malformed drop.
+   DEBUG: 2026-09-04 00:09:01,950:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,952:      pdf_renderer.py:  470: printSegment: Stateful connection lifecycle: new, established, closed, timed out.
+   DEBUG: 2026-09-04 00:09:01,954:      pdf_renderer.py:  470: printSegment: Step 12: Build a baseline for comparison (nftables vs. XDP)
+   DEBUG: 2026-09-04 00:09:01,956:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,958:      pdf_renderer.py:  470: printSegment: test/benchmark_baseline_nftables.sh
+   DEBUG: 2026-09-04 00:09:01,959:      pdf_renderer.py:  470: printSegment:  benchmarks identical stateful policies in 
+   DEBUG: 2026-09-04 00:09:01,961:      pdf_renderer.py:  470: printSegment: nftables
+   DEBUG: 2026-09-04 00:09:01,962:      pdf_renderer.py:  470: printSegment:  vs 
+   DEBUG: 2026-09-04 00:09:01,964:      pdf_renderer.py:  470: printSegment: eBPF/XDP
+   DEBUG: 2026-09-04 00:09:01,965:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2026-09-04 00:09:01,966:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,969:      pdf_renderer.py:  470: printSegment: Measures throughput (iperf3), latency (ping RTT), and CPU utilization under SYN floods.
+   DEBUG: 2026-09-04 00:09:01,971:      pdf_renderer.py:  470: printSegment: Step 13: Generate test traffic
+   DEBUG: 2026-09-04 00:09:01,972:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,974:      pdf_renderer.py:  470: printSegment: Tools inside the container lab:
+   DEBUG: 2026-09-04 00:09:01,975:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,977:      pdf_renderer.py:  470: printSegment: curl
+   DEBUG: 2026-09-04 00:09:01,979:      pdf_renderer.py:  470: printSegment:  / 
+   DEBUG: 2026-09-04 00:09:01,980:      pdf_renderer.py:  470: printSegment: nginx
+   DEBUG: 2026-09-04 00:09:01,982:      pdf_renderer.py:  470: printSegment: : HTTP web traffic.
+   DEBUG: 2026-09-04 00:09:01,983:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,985:      pdf_renderer.py:  470: printSegment: iperf3
+   DEBUG: 2026-09-04 00:09:01,987:      pdf_renderer.py:  470: printSegment: : Max-bandwidth throughput.
+   DEBUG: 2026-09-04 00:09:01,988:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,989:      pdf_renderer.py:  470: printSegment: ping
+   DEBUG: 2026-09-04 00:09:01,991:      pdf_renderer.py:  470: printSegment: : ICMP latency and reachability.
+   DEBUG: 2026-09-04 00:09:01,993:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:01,994:      pdf_renderer.py:  470: printSegment: hping3
+   DEBUG: 2026-09-04 00:09:01,998:      pdf_renderer.py:  470: printSegment: : TCP SYN floods, UDP blasts, ICMP floods, malformed Xmas packets,
+   DEBUG: 2026-09-04 00:09:02,000:      pdf_renderer.py:  470: printSegment: and unsolicited ACK injection.
+   DEBUG: 2026-09-04 00:09:02,002:      pdf_renderer.py:  470: printSegment: Step 14: Run through the test cases
+   DEBUG: 2026-09-04 00:09:02,003:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,005:      pdf_renderer.py:  470: printSegment: test/run_all_tests.sh
+   DEBUG: 2026-09-04 00:09:02,006:      pdf_renderer.py:  470: printSegment:  verifies:
+   DEBUG: 2026-09-04 00:09:02,007:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2026-09-04 00:09:02,009:      pdf_renderer.py:  470: printSegment: Allowed traffic passes (HTTP :80 
+   DEBUG: 2026-09-04 00:09:02,009:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:02,010:      pdf_renderer.py:  470: printSegment:  ICMP).
+   DEBUG: 2026-09-04 00:09:02,011:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2026-09-04 00:09:02,012:      pdf_renderer.py:  470: printSegment: Blocked ports are dropped (Port 8080 / Port 22).
+   DEBUG: 2026-09-04 00:09:02,013:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2026-09-04 00:09:02,014:      pdf_renderer.py:  470: printSegment: Full TCP handshake is tracked in the state table.
+   DEBUG: 2026-09-04 00:09:02,015:      pdf_renderer.py:  470: printSegment:  4 
+   DEBUG: 2026-09-04 00:09:02,017:      pdf_renderer.py:  470: printSegment: Unsolicited packets with no matching state are dropped.
+   DEBUG: 2026-09-04 00:09:02,018:      pdf_renderer.py:  470: printSegment: Step 15: Validate the exact packet path first
+   DEBUG: 2026-09-04 00:09:02,019:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,020:      pdf_renderer.py:  470: printSegment: scripts/trace_packet_path.sh
+   DEBUG: 2026-09-04 00:09:02,022:      pdf_renderer.py:  470: printSegment:  and 
+   DEBUG: 2026-09-04 00:09:02,023:      pdf_renderer.py:  470: printSegment: docs/PACKET_PATH_VALIDATION.md
+   DEBUG: 2026-09-04 00:09:02,030:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2026-09-04 00:09:02,033:      pdf_renderer.py:  470: printSegment: document the six-stage transit lifecycle across Incus bridges, veth pairs, XDP hooks, routing FIBs,
+   DEBUG: 2026-09-04 00:09:02,034:      pdf_renderer.py:  470: printSegment: and target containers.
+   DEBUG: 2026-09-04 00:09:02,036:      pdf_renderer.py:  470: printSegment: Step 16: Treat this as an expandable platform
+   DEBUG: 2026-09-04 00:09:02,037:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,038:      pdf_renderer.py:  470: printSegment: docs/ARCHITECTURE_AND_EXTENSIONS.md
+   DEBUG: 2026-09-04 00:09:02,039:      pdf_renderer.py:  470: printSegment:  details future platform extensions:
+   DEBUG: 2026-09-04 00:09:02,040:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,042:      pdf_renderer.py:  470: printSegment: Token-bucket per-IP rate limiting.
+   DEBUG: 2026-09-04 00:09:02,044:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,046:      pdf_renderer.py:  470: printSegment: Stateless SYN Cookies for DDoS protection.
+   DEBUG: 2026-09-04 00:09:02,048:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,051:      pdf_renderer.py:  470: printSegment: Adaptive dynamic blacklisting of repeat offenders.
+   DEBUG: 2026-09-04 00:09:02,052:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2026-09-04 00:09:02,055:      pdf_renderer.py:  470: printSegment: Flow telemetry export for Machine Learning anomaly detection.
+   DEBUG: 2026-09-04 00:09:02,057:      pdf_renderer.py:  470: printSegment: \
+   DEBUG: 2026-09-04 00:09:02,058:      pdf_renderer.py:  470: printSegment: newpage
+   DEBUG: 2026-09-04 00:09:02,061:      pdf_renderer.py:  470: printSegment: 📚 Documentation Index — High-Performance Stateful eBPF/XDP Firewall
+   DEBUG: 2026-09-04 00:09:02,063:      pdf_renderer.py:  470: printSegment: Project
+   DEBUG: 2026-09-04 00:09:02,065:      pdf_renderer.py:  470: printSegment: : High-Performance Stateful eBPF/XDP Firewall
+   DEBUG: 2026-09-04 00:09:02,067:      pdf_renderer.py:  470: printSegment: Author
+   DEBUG: 2026-09-04 00:09:02,069:      pdf_renderer.py:  470: printSegment: : Nishant
+   DEBUG: 2026-09-04 00:09:02,070:      pdf_renderer.py:  470: printSegment: Platform
+   DEBUG: 2026-09-04 00:09:02,072:      pdf_renderer.py:  470: printSegment: : Linux (Kernel ≥ 5.15 with BTF support)
+   DEBUG: 2026-09-04 00:09:02,074:      pdf_renderer.py:  470: printSegment: Technologies
+   DEBUG: 2026-09-04 00:09:02,076:      pdf_renderer.py:  470: printSegment: : eBPF, XDP, TC, libbpf, Incus Containers, C
+   DEBUG: 2026-09-04 00:09:02,079:      pdf_renderer.py:  470: printSegment: Document Map
+   DEBUG: 2026-09-04 00:09:02,081:      pdf_renderer.py:  470: printSegment: | # | Document | Description | Key Topics |
+   DEBUG: 2026-09-04 00:09:02,082:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:02,084:      pdf_renderer.py:  470: printSegment: |---|----------|-------------|------------|
+   DEBUG: 2026-09-04 00:09:02,085:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2026-09-04 00:09:02,087:      pdf_renderer.py:  470: printSegment: | 01 | 
+   DEBUG: 2026-09-04 00:09:02,089:      pdf_renderer.py:  470: printSegment: Container Lab Environment 
+   DEBUG: 2026-09-04 00:09:02,090:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2026-09-04 00:09:02,092:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2026-09-04 00:09:02,093:      pdf_renderer.py:  470: printSegment: Network Topology

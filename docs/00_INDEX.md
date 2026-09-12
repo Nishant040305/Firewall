@@ -1,7 +1,6 @@
 # 📚 Documentation Index — High-Performance Stateful eBPF/XDP Firewall
 
 > **Project**: High-Performance Stateful eBPF/XDP Firewall  
-> **Author**: Nishant  
 > **Platform**: Linux (Kernel ≥ 5.15 with BTF support)  
 > **Technologies**: eBPF, XDP, TC, libbpf, Incus Containers, C
 
@@ -21,20 +20,12 @@
 
 ---
 
-## Quick Navigation
+## Recommended Reading Path
 
-### For Understanding the System
-1. Start with **[01 — Container Lab](01_CONTAINER_LAB_SETUP.md)** to understand the network topology
-2. Read **[02 — eBPF Dataplane](02_EBPF_DATAPLANE.md)** to understand the kernel packet processing pipeline
-3. Study **[06 — Packet Path](PACKET_PATH_VALIDATION.md)** to trace a packet end-to-end
-
-### For Building and Running
-1. Follow **[03 — Build Process](03_BUILD_PROCESS.md)** for prerequisites and compilation
-2. Reference **[04 — Userspace Control Plane](04_USERSPACE_CONTROL_PLANE.md)** for CLI commands
-
-### For Testing and Validation
-1. Use **[05 — Testing & Validation](05_TESTING_AND_VALIDATION.md)** for test execution
-2. Review **[07 — Extensions](ARCHITECTURE_AND_EXTENSIONS.md)** for future platform capabilities
+To review this project effectively:
+- **Architecture & Foundation**: Begin with Document 01 (Container Lab) to review the network environment, followed by Document 02 (eBPF Dataplane) and Document 06 (Packet Path Validation) to examine kernel packet processing.
+- **Implementation & Operations**: Follow Document 03 (Build Process) for toolchain setup and compilation details, then consult Document 04 (Userspace Control Plane) for CLI syntax and runtime management.
+- **Empirical Evaluation**: Review Document 05 (Testing & Validation) for automated test suites and comparative benchmarks, concluding with Document 07 (Future Extensions) for modular platform roadmap.
 
 ---
 

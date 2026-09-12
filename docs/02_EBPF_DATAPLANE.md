@@ -28,6 +28,11 @@ All entry points invoke the shared `process_packet()` function, which defines a 
 
 ### 4-Stage Pipeline Diagram
 
+![4-Stage Packet Processing Pipeline](images/ebpf_4stage_pipeline.png)
+
+<details>
+<summary><b>View Mermaid Source</b></summary>
+
 ```mermaid
 flowchart TD
     A[Entry Point: XDP or TC] --> B[Stage 1: L2/L3/L4 Parsing]
@@ -38,6 +43,7 @@ flowchart TD
     F -->|PASS| G[Pass Packet to Stack]
     F -->|DROP/REJECT| H[Drop Packet]
 ```
+</details>
 
 ## 4. Pipeline Stages
 
@@ -107,6 +113,11 @@ struct pkt_ctx {
 
 The connection tracking engine correctly tracks the TCP three-way handshake and teardown:
 
+![TCP Connection State Machine](images/tcp_state_machine.png)
+
+<details>
+<summary><b>View Mermaid Source</b></summary>
+
 ```mermaid
 stateDiagram-v2
     [*] --> SYN_SENT: SYN (new, allowed by rule)
@@ -118,6 +129,7 @@ stateDiagram-v2
     FIN_WAIT --> CLOSED: Timeout/RST
     CLOSED --> [*]
 ```
+</details>
 
 ### Connection Timeouts
 

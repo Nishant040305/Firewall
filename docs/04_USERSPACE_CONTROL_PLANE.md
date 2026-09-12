@@ -22,6 +22,11 @@ The architecture is built around a central context, modular subsystems, and libb
 
 ## 2. Component Diagram
 
+![Userspace Control Plane Architecture](images/userspace_component_diagram.png)
+
+<details>
+<summary><b>View Mermaid Source</b></summary>
+
 ```mermaid
 graph TD
     subgraph Userspace Control Plane [Userspace Control Plane fw-ctl]
@@ -59,6 +64,7 @@ graph TD
     Loader -.-> CTMap
     Loader -.-> StatsMap
 ```
+</details>
 
 ## 3. Daemon Mode vs. Management Mode
 

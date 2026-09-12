@@ -1,0 +1,364 @@
+/* ==========================================================================
+   Academic & Professional Print Stylesheet for WeasyPrint / Pandoc
+   eBPF/XDP Firewall Technical Documentation
+   ========================================================================== */
+
+@page {
+    size: A4;
+    margin: 24mm 18mm 24mm 18mm;
+
+    @top-left {
+        content: "High-Performance Stateful eBPF/XDP Firewall";
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 8pt;
+        font-weight: 500;
+        color: #475569;
+        border-bottom: 0.5pt solid #cbd5e1;
+        padding-bottom: 5px;
+        vertical-align: bottom;
+    }
+
+    @top-right {
+        content: "System Architecture & Technical Manual";
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 8pt;
+        color: #64748b;
+        font-style: italic;
+        border-bottom: 0.5pt solid #cbd5e1;
+        padding-bottom: 5px;
+        vertical-align: bottom;
+    }
+
+    @bottom-left {
+        content: "Stateful eBPF/XDP Firewall — Technical Documentation";
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 8pt;
+        color: #94a3b8;
+        border-top: 0.5pt solid #e2e8f0;
+        padding-top: 5px;
+    }
+
+    @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 8.5pt;
+        font-weight: 600;
+        color: #334155;
+        border-top: 0.5pt solid #e2e8f0;
+        padding-top: 5px;
+    }
+}
+
+@page:first {
+    margin: 0;
+    @top-left { content: none; }
+    @top-right { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+}
+
+/* ==========================================================================
+   Base Typography
+   ========================================================================== */
+html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Liberation Sans", Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.55;
+    color: #1e293b;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+/* Cover Page Container */
+.cover-page {
+    page-break-after: always;
+    height: 100vh;
+    max-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 30mm 20mm 20mm 20mm;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+    overflow: hidden;
+}
+
+.cover-page h1 {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #38bdf8;
+    margin: 0 0 15px 0;
+    line-height: 1.2;
+    border: none;
+    padding: 0;
+    page-break-before: avoid;
+}
+
+.cover-page .subtitle {
+    font-size: 14pt;
+    font-weight: 300;
+    color: #cbd5e1;
+    margin: 0 0 40px 0;
+    letter-spacing: 0.5px;
+}
+
+.cover-page .badge {
+    display: inline-block;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid #38bdf8;
+    color: #7dd3fc;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 9pt;
+    font-weight: 600;
+    margin-bottom: 50px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cover-page .metadata {
+    margin-top: auto;
+    border-top: 1px solid #334155;
+    padding-top: 25px;
+    width: 80%;
+    display: flex;
+    justify-content: space-around;
+    font-size: 9.5pt;
+    color: #94a3b8;
+}
+
+.cover-page .metadata p {
+    margin: 4px 0;
+}
+
+.cover-page .metadata strong {
+    color: #f1f5f9;
+}
+
+/* Headings */
+h1 {
+    font-size: 18pt;
+    font-weight: 700;
+    color: #0f172a;
+    border-bottom: 2pt solid #2563eb;
+    padding-bottom: 6px;
+    margin-top: 30px;
+    margin-bottom: 16px;
+    page-break-before: always;
+    page-break-after: avoid;
+}
+
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
+h2 {
+    font-size: 13.5pt;
+    font-weight: 600;
+    color: #1e3a8a;
+    border-bottom: 0.75pt solid #e2e8f0;
+    padding-bottom: 4px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+}
+
+h3 {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #1d4ed8;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+}
+
+h4, h5, h6 {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #334155;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-align: justify;
+}
+
+/* Links */
+a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+/* Lists */
+ul, ol {
+    margin-top: 0;
+    margin-bottom: 12px;
+    padding-left: 22px;
+}
+
+li {
+    margin-bottom: 4px;
+}
+
+/* Tables */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0 20px 0;
+    font-size: 8.5pt;
+    page-break-inside: auto;
+}
+
+thead {
+    display: table-header-group;
+}
+
+tr {
+    page-break-inside: avoid;
+}
+
+th {
+    background-color: #1e293b;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 10px;
+    border: 1px solid #334155;
+    letter-spacing: 0.3px;
+}
+
+td {
+    border: 1px solid #cbd5e1;
+    padding: 5px 9px;
+    vertical-align: top;
+}
+
+tr:nth-child(even) td {
+    background-color: #f8fafc;
+}
+
+/* Code & Preformatted Blocks */
+pre, pre.sourceCode {
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-left: 3.5px solid #2563eb;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 12px 0 16px 0;
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, "Courier New", monospace;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    color: #0f172a;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    page-break-inside: auto;
+}
+
+code {
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, "Courier New", monospace;
+    font-size: 8pt;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 1.5px 4px;
+    border-radius: 3px;
+    border: 0.5px solid #e2e8f0;
+}
+
+pre code {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Blockquotes & Callouts */
+blockquote {
+    border-left: 3.5px solid #3b82f6;
+    background-color: #eff6ff;
+    color: #1e3a8a;
+    margin: 14px 0;
+    padding: 10px 14px;
+    border-radius: 0 4px 4px 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+}
+
+blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* Horizontal Rules */
+hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 24px 0;
+}
+
+/* Hide Title Header and TOC */
+#title-block-header, #TOC {
+    display: none !important;
+}
+
+#TOC > ul {
+    padding-left: 0;
+    list-style-type: none;
+}
+
+#TOC ul {
+    padding-left: 18px;
+    font-size: 9pt;
+}
+
+#TOC li {
+    margin-bottom: 5px;
+}
+
+#TOC a {
+    color: #1e293b;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+#TOC a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+/* ASCII Diagrams */
+pre:has(code:empty), pre:not([class]) {
+    background-color: #0f172a;
+    color: #38bdf8;
+    border-left: 3.5px solid #38bdf8;
+    font-size: 7.5pt;
+    line-height: 1.25;
+}
+
+/* Rendered Vector Diagrams & Images */
+img {
+    display: block;
+    margin: 16px auto;
+    max-width: 95%;
+    max-height: 190mm;
+    object-fit: contain;
+    height: auto;
+    page-break-inside: avoid;
+    background-color: #ffffff;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+/* Hide collapsible raw mermaid source blocks in the printed PDF */
+details {
+    display: none !important;
+}

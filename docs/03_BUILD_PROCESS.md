@@ -72,7 +72,7 @@ Building the project is streamlined via a GNU Makefile.
 
 1.  **Clone the repository and navigate to the project root:**
     ```bash
-    cd /home/Nishant/code/FirewallProgram
+    cd FirewallProgram
     ```
 2.  **Execute the build:**
     ```bash
@@ -120,6 +120,11 @@ The Makefile invokes GCC for the userspace application:
 ### 5.1 Build Directory Structure
 Upon successful compilation, the Makefile generates the following structure in the `build/` directory:
 
+![Build Directory Structure](images/build_directory_structure.png)
+
+<details>
+<summary><b>View Mermaid Source</b></summary>
+
 ```mermaid
 graph TD
     A[build/] --> B(core/)
@@ -135,6 +140,7 @@ graph TD
     D -.-> D1[*.o object files]
     E -.-> E1[*.o object files]
 ```
+</details>
 
 ### 5.2 Source File Organization
 
@@ -159,6 +165,11 @@ graph TD
 
 ### 5.3 High-Level Dependency Graph
 
+![High-Level Build Dependency Graph](images/build_dependency_graph.png)
+
+<details>
+<summary><b>View Mermaid Source</b></summary>
+
 ```mermaid
 flowchart TD
     subgraph Userspace Binary [fw-ctl]
@@ -175,6 +186,7 @@ flowchart TD
 
     loader -. loads .-> bpf
 ```
+</details>
 
 ---
 
