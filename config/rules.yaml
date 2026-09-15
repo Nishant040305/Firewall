@@ -31,6 +31,6 @@
 
 - name: "Allow SSH Access"
   proto: tcp
-  dst: 22
+  dport: 22
   action: allow
   desc: "SSH Access"
