@@ -3,7 +3,10 @@
 ## 1. Overview of eBPF and XDP Technology
 The kernel dataplane of the High-Performance Stateful Firewall leverages extended Berkeley Packet Filter (eBPF) and eXpress Data Path (XDP) technologies. 
 eBPF allows running sandboxed C-like programs in the Linux kernel without changing kernel source code or loading kernel modules. 
-XDP provides a high-performance, programmable network data path in the Linux kernel. It hooks into the network stack at the lowest possible point—the network interface controller (NIC) driver—before the kernel allocates an `sk_buff` (socket buffer) data structure. This early intervention bypasses the heavy overhead of the traditional network stack, allowing for line-rate packet processing, which saves up to 90% CPU overhead compared to standard kernel processing.
+
+XDP provides a high-performance, programmable network data path in the Linux kernel. XDP supports two primary execution modes:
+- **Native Driver Mode (`xdpdrv`):** Executes in the network interface controller (NIC) driver rx-ring before the kernel allocates an `sk_buff` (socket buffer). This bypasses traditional network stack memory allocations and IP stack overhead, enabling line-rate packet drops and substantial CPU savings during high-volume packet floods.
+- **Generic / SKB Mode (`xdpgeneric`):** Used when the underlying network device driver does not implement native XDP callbacks (`ndo_bpf`), such as Linux software bridges (`bridge` driver). In generic mode, the kernel allocates the `sk_buff` first, then invokes the XDP hook. Even in generic mode, XDP drops unauthorized and flood packets before connection tracking in netfilter (`nf_conntrack`), routing table lookups, and socket delivery, avoiding connection table lock contention.
 
 ## 2. XDP vs TC
 
@@ -11,11 +14,12 @@ While XDP is ideal for ingress traffic, it cannot natively handle egress traffic
 
 | Feature | XDP (eXpress Data Path) | TC (Traffic Control) |
 |---------|-------------------------|----------------------|
-| **Hook Point** | Driver level, before `sk_buff` allocation | Network stack, after `sk_buff` allocation |
+| **Hook Point** | Driver layer (`xdpdrv`) or early core stack (`xdpgeneric`) | Network stack `clsact` qdisc layer |
 | **Direction** | Ingress only | Ingress and Egress |
-| **Overhead** | Ultra-low (saves ~90% CPU) | Moderate (sk_buff overhead) |
-| **Return Codes** | `XDP_PASS`, `XDP_DROP`, etc. | `TC_ACT_OK`, `TC_ACT_SHOT`, etc. |
-| **Use Case in Project**| Fast-path ingress firewall filtering | Egress firewall filtering |
+| **sk_buff Allocation** | Zero in `xdpdrv`; present in `xdpgeneric` | Always present (`struct __sk_buff`) |
+| **Return Codes** | `XDP_PASS`, `XDP_DROP`, `XDP_TX`, `XDP_REDIRECT` | `TC_ACT_OK`, `TC_ACT_SHOT`, `TC_ACT_PIPE` |
+| **Use Case in Project**| Fast-path ingress firewall filtering and DoS drop | Stateful egress flow tracking and filtering |
+
 
 ## 3. Architecture Overview
 
