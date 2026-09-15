@@ -28,3 +28,9 @@
   dport: 53
   action: allow
   desc: "DNS Queries"
+
+- name: "Allow SSH Access"
+  proto: tcp
+  dst: 22
+  action: allow
+  desc: "SSH Access"
