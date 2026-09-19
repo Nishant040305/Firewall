@@ -7,7 +7,8 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's
 MULTIARCH ?= $(shell gcc -print-multiarch 2>/dev/null)
 ARCH_INC := $(if $(MULTIARCH),-I/usr/include/$(MULTIARCH),)
 
-BPF_CFLAGS ?= -O2 -g -Wall -target bpf -D__TARGET_ARCH_$(ARCH) $(ARCH_INC) -I/usr/include -Iinclude -Isrc/kernel
+RAW_ARCH ?= $(shell uname -m)
+BPF_CFLAGS ?= -O2 -g -Wall -target bpf -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -I/usr/include -Iinclude -Isrc/kernel
 
 BUILD_DIR = build
 

@@ -17,7 +17,7 @@ enum attach_mode {
 
 /* Typed Runtime Firewall Configuration */
 struct firewall_config {
-    char interface[32];
+    char interface[256];
     char log_level[16];
     enum traffic_direction direction; /* TRAFFIC_DIR_BOTH, etc. */
     enum attach_mode mode;            /* ATTACH_MODE_HYBRID, ATTACH_MODE_TC, or ATTACH_MODE_XDP */

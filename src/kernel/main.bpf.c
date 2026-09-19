@@ -106,7 +106,16 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         inc_stat(STAT_DROPPED_PACKETS);
     }
 
-    emit_packet_event(pkt);
+    /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
+    if (decision == ACTION_DROP ||
+        pkt->conn_state == CONN_STATE_SYN_SENT ||
+        pkt->conn_state == CONN_STATE_SYN_RECV ||
+        pkt->conn_state == CONN_STATE_CLOSED ||
+        pkt->conn_state == CONN_STATE_FIN_WAIT ||
+        pkt->conn_state == CONN_STATE_NEW ||
+        (pkt->proto == IPPROTO_TCP && (pkt->tcp_flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST)))) {
+        emit_packet_event(pkt);
+    }
     return decision;
 }
 

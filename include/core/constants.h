@@ -30,7 +30,7 @@
 /* Timeouts (Nanoseconds) */
 #define UDP_TIMEOUT_NS             (30ULL * 1000000000ULL)  /* 30 seconds */
 #define ICMP_TIMEOUT_NS            (10ULL * 1000000000ULL)  /* 10 seconds */
-#define TCP_SYN_TIMEOUT_NS         (30ULL * 1000000000ULL)  /* 30 seconds */
+#define TCP_SYN_TIMEOUT_NS         (3ULL * 1000000000ULL)   /* 3 seconds (mitigates SYN flood) */
 #define TCP_ESTABLISHED_TIMEOUT_NS (300ULL * 1000000000ULL) /* 5 minutes */
 #define TCP_CLOSE_TIMEOUT_NS       (10ULL * 1000000000ULL)  /* 10 seconds */
 

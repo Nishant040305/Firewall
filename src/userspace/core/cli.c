@@ -98,9 +98,8 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
                         opts->new_rule.dst_ip = inet_addr(argv[++i]);
                         opts->new_rule.dst_mask = 0xFFFFFFFF;
                     } else if (strcmp(argv[i], "--dport") == 0 && i + 1 < argc) {
-                        opts->new_rule.flags |= RULE_FLAG_DST_PORT;
                         const char *val = argv[++i];
-                        char *dash = strchr(val, '-');
+                        const char *dash = strchr(val, '-');
                         if (dash) {
                             opts->new_rule.dst_port_min = atoi(val);
                             opts->new_rule.dst_port_max = atoi(dash + 1);

@@ -11,7 +11,7 @@
 #include "bpf_loader.h"
 #include "config.h"
 
-static int attach_xdp(struct bpf_loader_ctx *ctx)
+static int attach_xdp(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
 {
     struct bpf_program *prog = bpf_object__find_program_by_name(ctx->obj, "xdp_firewall_prog");
     if (!prog) {
@@ -22,48 +22,49 @@ static int attach_xdp(struct bpf_loader_ctx *ctx)
     ctx->xdp_prog_fd = bpf_program__fd(prog);
 
     /* Attempt Native Driver mode first, fall back to SKB (Generic) mode */
-    ctx->xdp_flags = XDP_FLAGS_DRV_MODE;
-    printf("[+] Attaching XDP program to %s (Native DRV mode)...\n", ctx->ifname);
-    int err = bpf_xdp_attach(ctx->ifindex, ctx->xdp_prog_fd, ctx->xdp_flags, NULL);
+    ih->xdp_flags = XDP_FLAGS_DRV_MODE;
+    printf("[+] Attaching XDP program to %s (Native DRV mode)...\n", ih->ifname);
+    int err = bpf_xdp_attach(ih->ifindex, ctx->xdp_prog_fd, ih->xdp_flags, NULL);
     if (err) {
-        printf("[!] Native driver mode not supported on %s, falling back to Generic (SKB) mode...\n", ctx->ifname);
-        ctx->xdp_flags = XDP_FLAGS_SKB_MODE;
-        err = bpf_xdp_attach(ctx->ifindex, ctx->xdp_prog_fd, ctx->xdp_flags, NULL);
+        printf("[!] Native driver mode not supported on %s, falling back to Generic (SKB) mode...\n", ih->ifname);
+        ih->xdp_flags = XDP_FLAGS_SKB_MODE;
+        err = bpf_xdp_attach(ih->ifindex, ctx->xdp_prog_fd, ih->xdp_flags, NULL);
         if (err) {
-            fprintf(stderr, "[-] Error: Failed to attach XDP to %s: %s\n", ctx->ifname, strerror(-err));
+            fprintf(stderr, "[-] Error: Failed to attach XDP to %s: %s\n", ih->ifname, strerror(-err));
             return -1;
         }
     }
 
+    ih->xdp_attached = 1;
     ctx->xdp_attached = 1;
-    printf("[+] Successfully attached XDP INGRESS program to %s (ifindex: %d)\n", ctx->ifname, ctx->ifindex);
+    printf("[+] Successfully attached XDP INGRESS program to %s (ifindex: %d)\n", ih->ifname, ih->ifindex);
     return 0;
 }
 
-static int ensure_tc_qdisc(struct bpf_loader_ctx *ctx)
+static int ensure_tc_qdisc(struct iface_hook *ih)
 {
-    if (ctx->tc_hook_created)
+    if (ih->tc_hook_created)
         return 0;
 
     struct bpf_tc_hook qdisc_hook;
     memset(&qdisc_hook, 0, sizeof(qdisc_hook));
     qdisc_hook.sz = sizeof(struct bpf_tc_hook);
-    qdisc_hook.ifindex = ctx->ifindex;
+    qdisc_hook.ifindex = ih->ifindex;
     qdisc_hook.attach_point = BPF_TC_INGRESS | BPF_TC_EGRESS;
 
     int err = bpf_tc_hook_create(&qdisc_hook);
     if (err && err != -EEXIST && errno != EEXIST) {
         fprintf(stderr, "[-] Warning: Failed to create TC clsact hook on %s: %s (%d)\n",
-                ctx->ifname, strerror(-err), err);
+                ih->ifname, strerror(-err), err);
     } else {
-        ctx->tc_hook_created = 1;
+        ih->tc_hook_created = 1;
     }
     return 0;
 }
 
-static int attach_tc_ingress(struct bpf_loader_ctx *ctx)
+static int attach_tc_ingress(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
 {
-    ensure_tc_qdisc(ctx);
+    ensure_tc_qdisc(ih);
 
     struct bpf_program *prog_in = bpf_object__find_program_by_name(ctx->obj, "tc_ingress_prog");
     if (!prog_in) {
@@ -71,30 +72,31 @@ static int attach_tc_ingress(struct bpf_loader_ctx *ctx)
         return -1;
     }
 
-    memset(&ctx->tc_hook_ingress, 0, sizeof(ctx->tc_hook_ingress));
-    ctx->tc_hook_ingress.sz = sizeof(struct bpf_tc_hook);
-    ctx->tc_hook_ingress.ifindex = ctx->ifindex;
-    ctx->tc_hook_ingress.attach_point = BPF_TC_INGRESS;
+    memset(&ih->tc_hook_ingress, 0, sizeof(ih->tc_hook_ingress));
+    ih->tc_hook_ingress.sz = sizeof(struct bpf_tc_hook);
+    ih->tc_hook_ingress.ifindex = ih->ifindex;
+    ih->tc_hook_ingress.attach_point = BPF_TC_INGRESS;
 
-    memset(&ctx->tc_opts_ingress, 0, sizeof(ctx->tc_opts_ingress));
-    ctx->tc_opts_ingress.sz = sizeof(struct bpf_tc_opts);
-    ctx->tc_opts_ingress.prog_fd = bpf_program__fd(prog_in);
+    memset(&ih->tc_opts_ingress, 0, sizeof(ih->tc_opts_ingress));
+    ih->tc_opts_ingress.sz = sizeof(struct bpf_tc_opts);
+    ih->tc_opts_ingress.prog_fd = bpf_program__fd(prog_in);
 
-    printf("[+] Attaching TC INGRESS program to %s...\n", ctx->ifname);
-    int err = bpf_tc_attach(&ctx->tc_hook_ingress, &ctx->tc_opts_ingress);
+    printf("[+] Attaching TC INGRESS program to %s...\n", ih->ifname);
+    int err = bpf_tc_attach(&ih->tc_hook_ingress, &ih->tc_opts_ingress);
     if (err) {
         fprintf(stderr, "[-] Error: Failed to attach TC ingress to %s: %s (%d)\n",
-                ctx->ifname, strerror(-err), err);
+                ih->ifname, strerror(-err), err);
         return -1;
     }
+    ih->tc_ingress_attached = 1;
     ctx->tc_ingress_attached = 1;
-    printf("[+] Successfully attached TC INGRESS program to %s (ifindex: %d)\n", ctx->ifname, ctx->ifindex);
+    printf("[+] Successfully attached TC INGRESS program to %s (ifindex: %d)\n", ih->ifname, ih->ifindex);
     return 0;
 }
 
-static int attach_tc_egress(struct bpf_loader_ctx *ctx)
+static int attach_tc_egress(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
 {
-    ensure_tc_qdisc(ctx);
+    ensure_tc_qdisc(ih);
 
     struct bpf_program *prog_out = bpf_object__find_program_by_name(ctx->obj, "tc_egress_prog");
     if (!prog_out) {
@@ -102,24 +104,25 @@ static int attach_tc_egress(struct bpf_loader_ctx *ctx)
         return -1;
     }
 
-    memset(&ctx->tc_hook_egress, 0, sizeof(ctx->tc_hook_egress));
-    ctx->tc_hook_egress.sz = sizeof(struct bpf_tc_hook);
-    ctx->tc_hook_egress.ifindex = ctx->ifindex;
-    ctx->tc_hook_egress.attach_point = BPF_TC_EGRESS;
+    memset(&ih->tc_hook_egress, 0, sizeof(ih->tc_hook_egress));
+    ih->tc_hook_egress.sz = sizeof(struct bpf_tc_hook);
+    ih->tc_hook_egress.ifindex = ih->ifindex;
+    ih->tc_hook_egress.attach_point = BPF_TC_EGRESS;
 
-    memset(&ctx->tc_opts_egress, 0, sizeof(ctx->tc_opts_egress));
-    ctx->tc_opts_egress.sz = sizeof(struct bpf_tc_opts);
-    ctx->tc_opts_egress.prog_fd = bpf_program__fd(prog_out);
+    memset(&ih->tc_opts_egress, 0, sizeof(ih->tc_opts_egress));
+    ih->tc_opts_egress.sz = sizeof(struct bpf_tc_opts);
+    ih->tc_opts_egress.prog_fd = bpf_program__fd(prog_out);
 
-    printf("[+] Attaching TC EGRESS program to %s...\n", ctx->ifname);
-    int err = bpf_tc_attach(&ctx->tc_hook_egress, &ctx->tc_opts_egress);
+    printf("[+] Attaching TC EGRESS program to %s...\n", ih->ifname);
+    int err = bpf_tc_attach(&ih->tc_hook_egress, &ih->tc_opts_egress);
     if (err) {
         fprintf(stderr, "[-] Error: Failed to attach TC egress to %s: %s (%d)\n",
-                ctx->ifname, strerror(-err), err);
+                ih->ifname, strerror(-err), err);
         return -1;
     }
+    ih->tc_egress_attached = 1;
     ctx->tc_egress_attached = 1;
-    printf("[+] Successfully attached TC EGRESS program to %s (ifindex: %d)\n", ctx->ifname, ctx->ifindex);
+    printf("[+] Successfully attached TC EGRESS program to %s (ifindex: %d)\n", ih->ifname, ih->ifindex);
     return 0;
 }
 
@@ -130,12 +133,40 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
     ctx->direction = cfg->direction;
     ctx->mode = cfg->mode;
 
-    ctx->ifindex = if_nametoindex(cfg->interface);
-    if (!ctx->ifindex) {
-        fprintf(stderr, "[-] Error: Failed to resolve interface index for '%s': %s\n",
-                cfg->interface, strerror(errno));
+    /* Parse comma-separated list of interfaces (e.g. "veth1,veth2") */
+    char iflist[256];
+    snprintf(iflist, sizeof(iflist), "%s", cfg->interface);
+    char *saveptr = NULL;
+    char *tok = strtok_r(iflist, ",", &saveptr);
+    ctx->num_ifaces = 0;
+
+    while (tok && ctx->num_ifaces < MAX_LOADER_IFACES) {
+        /* trim whitespace */
+        while (*tok == ' ' || *tok == '\t') tok++;
+        char *end = tok + strlen(tok) - 1;
+        while (end > tok && (*end == ' ' || *end == '\t')) *end-- = '\0';
+
+        if (strlen(tok) > 0) {
+            struct iface_hook *ih = &ctx->ifaces[ctx->num_ifaces];
+            memset(ih, 0, sizeof(*ih));
+            snprintf(ih->ifname, sizeof(ih->ifname), "%s", tok);
+            ih->ifindex = if_nametoindex(tok);
+            if (!ih->ifindex) {
+                fprintf(stderr, "[-] Error: Failed to resolve interface index for '%s': %s\n",
+                        tok, strerror(errno));
+                return -1;
+            }
+            ctx->num_ifaces++;
+        }
+        tok = strtok_r(NULL, ",", &saveptr);
+    }
+
+    if (ctx->num_ifaces == 0) {
+        fprintf(stderr, "[-] Error: No valid interfaces specified\n");
         return -1;
     }
+
+    ctx->ifindex = ctx->ifaces[0].ifindex;
 
     /* Auto-switch mode if pure XDP is requested for egress-only */
     if (ctx->mode == ATTACH_MODE_XDP && ctx->direction == TRAFFIC_DIR_EGRESS) {
@@ -159,40 +190,44 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
         return -1;
     }
 
-    /* Attach according to chosen mode */
-    if (ctx->mode == ATTACH_MODE_HYBRID) {
-        /* HYBRID: XDP for Ingress, TC for Egress */
-        if (ctx->direction == TRAFFIC_DIR_INGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
-            if (attach_xdp(ctx) < 0) {
+    /* Attach to each specified interface according to chosen mode */
+    for (int i = 0; i < ctx->num_ifaces; i++) {
+        struct iface_hook *ih = &ctx->ifaces[i];
+
+        if (ctx->mode == ATTACH_MODE_HYBRID) {
+            /* HYBRID: XDP for Ingress, TC for Egress */
+            if (ctx->direction == TRAFFIC_DIR_INGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
+                if (attach_xdp(ctx, ih) < 0) {
+                    bpf_loader_cleanup(ctx);
+                    return -1;
+                }
+            }
+            if (ctx->direction == TRAFFIC_DIR_EGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
+                if (attach_tc_egress(ctx, ih) < 0) {
+                    bpf_loader_cleanup(ctx);
+                    return -1;
+                }
+            }
+        } else if (ctx->mode == ATTACH_MODE_TC) {
+            /* Pure TC: TC Ingress + TC Egress */
+            if (ctx->direction == TRAFFIC_DIR_INGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
+                if (attach_tc_ingress(ctx, ih) < 0) {
+                    bpf_loader_cleanup(ctx);
+                    return -1;
+                }
+            }
+            if (ctx->direction == TRAFFIC_DIR_EGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
+                if (attach_tc_egress(ctx, ih) < 0) {
+                    bpf_loader_cleanup(ctx);
+                    return -1;
+                }
+            }
+        } else {
+            /* Pure XDP (Ingress only) */
+            if (attach_xdp(ctx, ih) < 0) {
                 bpf_loader_cleanup(ctx);
                 return -1;
             }
-        }
-        if (ctx->direction == TRAFFIC_DIR_EGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
-            if (attach_tc_egress(ctx) < 0) {
-                bpf_loader_cleanup(ctx);
-                return -1;
-            }
-        }
-    } else if (ctx->mode == ATTACH_MODE_TC) {
-        /* Pure TC: TC Ingress + TC Egress */
-        if (ctx->direction == TRAFFIC_DIR_INGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
-            if (attach_tc_ingress(ctx) < 0) {
-                bpf_loader_cleanup(ctx);
-                return -1;
-            }
-        }
-        if (ctx->direction == TRAFFIC_DIR_EGRESS || ctx->direction == TRAFFIC_DIR_BOTH) {
-            if (attach_tc_egress(ctx) < 0) {
-                bpf_loader_cleanup(ctx);
-                return -1;
-            }
-        }
-    } else {
-        /* Pure XDP (Ingress only) */
-        if (attach_xdp(ctx) < 0) {
-            bpf_loader_cleanup(ctx);
-            return -1;
         }
     }
 
@@ -211,6 +246,12 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
 int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx)
 {
     if (!ctx->obj) return -1;
+
+    /* Unlink stale pinned maps from previous runs so new maps pin cleanly */
+    unlink(MAP_PIN_RULES);
+    unlink(MAP_PIN_CONNTRACK);
+    unlink(MAP_PIN_STATS);
+    unlink(MAP_PIN_EVENTS);
 
     /* Create bpffs dir if not exists */
     bpf_object__pin_maps(ctx->obj, BPF_FS_PATH);
@@ -233,33 +274,46 @@ int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx)
 
 void bpf_loader_cleanup(struct bpf_loader_ctx *ctx)
 {
-    if (ctx->xdp_attached && ctx->ifindex > 0) {
-        printf("\n[*] Detaching XDP program from %s (ifindex: %d)...\n", ctx->ifname, ctx->ifindex);
-        bpf_xdp_detach(ctx->ifindex, ctx->xdp_flags, NULL);
-        ctx->xdp_attached = 0;
+    for (int i = 0; i < ctx->num_ifaces; i++) {
+        struct iface_hook *ih = &ctx->ifaces[i];
+
+        if (ih->xdp_attached && ih->ifindex > 0) {
+            printf("\n[*] Detaching XDP program from %s (ifindex: %d)...\n", ih->ifname, ih->ifindex);
+            bpf_xdp_detach(ih->ifindex, ih->xdp_flags, NULL);
+            ih->xdp_attached = 0;
+        }
+
+        if (ih->tc_ingress_attached) {
+            printf("\n[*] Detaching TC INGRESS program from %s...\n", ih->ifname);
+            bpf_tc_detach(&ih->tc_hook_ingress, &ih->tc_opts_ingress);
+            ih->tc_ingress_attached = 0;
+        }
+
+        if (ih->tc_egress_attached) {
+            printf("\n[*] Detaching TC EGRESS program from %s...\n", ih->ifname);
+            bpf_tc_detach(&ih->tc_hook_egress, &ih->tc_opts_egress);
+            ih->tc_egress_attached = 0;
+        }
+
+        if (ih->tc_hook_created) {
+            struct bpf_tc_hook qdisc_hook;
+            memset(&qdisc_hook, 0, sizeof(qdisc_hook));
+            qdisc_hook.sz = sizeof(struct bpf_tc_hook);
+            qdisc_hook.ifindex = ih->ifindex;
+            qdisc_hook.attach_point = BPF_TC_INGRESS | BPF_TC_EGRESS;
+            bpf_tc_hook_destroy(&qdisc_hook);
+            ih->tc_hook_created = 0;
+        }
     }
 
-    if (ctx->tc_ingress_attached) {
-        printf("\n[*] Detaching TC INGRESS program from %s...\n", ctx->ifname);
-        bpf_tc_detach(&ctx->tc_hook_ingress, &ctx->tc_opts_ingress);
-        ctx->tc_ingress_attached = 0;
-    }
+    ctx->xdp_attached = 0;
+    ctx->tc_ingress_attached = 0;
+    ctx->tc_egress_attached = 0;
 
-    if (ctx->tc_egress_attached) {
-        printf("\n[*] Detaching TC EGRESS program from %s...\n", ctx->ifname);
-        bpf_tc_detach(&ctx->tc_hook_egress, &ctx->tc_opts_egress);
-        ctx->tc_egress_attached = 0;
-    }
-
-    if (ctx->tc_hook_created) {
-        struct bpf_tc_hook qdisc_hook;
-        memset(&qdisc_hook, 0, sizeof(qdisc_hook));
-        qdisc_hook.sz = sizeof(struct bpf_tc_hook);
-        qdisc_hook.ifindex = ctx->ifindex;
-        qdisc_hook.attach_point = BPF_TC_INGRESS | BPF_TC_EGRESS;
-        bpf_tc_hook_destroy(&qdisc_hook);
-        ctx->tc_hook_created = 0;
-    }
+    unlink(MAP_PIN_RULES);
+    unlink(MAP_PIN_CONNTRACK);
+    unlink(MAP_PIN_STATS);
+    unlink(MAP_PIN_EVENTS);
 
     if (ctx->obj) {
         bpf_object__close(ctx->obj);

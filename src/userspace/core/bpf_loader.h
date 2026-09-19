@@ -5,12 +5,31 @@
 #include <bpf/libbpf.h>
 #include "config.h"
 
+#define MAX_LOADER_IFACES 16
+
+struct iface_hook {
+    char ifname[64];
+    int ifindex;
+    int xdp_attached;
+    __u32 xdp_flags;
+    int tc_ingress_attached;
+    int tc_egress_attached;
+    int tc_hook_created;
+    struct bpf_tc_hook tc_hook_ingress;
+    struct bpf_tc_opts tc_opts_ingress;
+    struct bpf_tc_hook tc_hook_egress;
+    struct bpf_tc_opts tc_opts_egress;
+};
+
 struct bpf_loader_ctx {
     struct bpf_object *obj;
     int ifindex;
-    char ifname[32];
+    char ifname[256];
     enum attach_mode mode;
     enum traffic_direction direction;
+
+    int num_ifaces;
+    struct iface_hook ifaces[MAX_LOADER_IFACES];
 
     /* XDP */
     int xdp_prog_fd;

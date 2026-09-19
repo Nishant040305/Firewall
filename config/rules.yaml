@@ -18,6 +18,13 @@
   action: allow
   desc: "iperf3 Throughput"
 
+- name: "Allow iperf3 UDP Benchmark"
+  proto: udp
+  dst: 10.10.2.10
+  dport: 5201
+  action: allow
+  desc: "iperf3 UDP Throughput"
+
 - name: "Allow ICMP Ping"
   proto: icmp
   action: allow

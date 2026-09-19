@@ -21,6 +21,7 @@ if command -v dnf >/dev/null 2>&1; then
         zlib-devel \
         glibc-devel \
         iproute \
+        bpftool \
         tcpdump \
         iperf3 \
         hping3 \
@@ -30,6 +31,16 @@ if command -v dnf >/dev/null 2>&1; then
         python3 \
         git \
         kernel-headers || true
+
+    # Install Incus on Fedora/RHEL if not present
+    if ! command -v incus >/dev/null 2>&1; then
+        echo "[+] Attempting to install Incus..."
+        if ! sudo dnf install -y incus 2>/dev/null; then
+            echo "[*] Trying to install Incus via ganto/incus COPR repository..."
+            sudo dnf copr enable -y ganto/incus 2>/dev/null || true
+            sudo dnf install -y incus incus-client 2>/dev/null || sudo dnf install -y incus 2>/dev/null || true
+        fi
+    fi
 elif command -v apt-get >/dev/null 2>&1; then
     echo "[+] Detected Ubuntu/Debian system (apt)"
     sudo apt-get update -y
@@ -65,7 +76,16 @@ sudo sysctl -w net.ipv4.ip_forward=1
 
 # Initialize Incus if installed
 if command -v incus &> /dev/null; then
+    echo "[+] Configuring container idmap (subuid/subgid)..."
+    if ! grep -q "^root:" /etc/subuid 2>/dev/null; then
+        echo "root:1000000:1000000000" | sudo tee -a /etc/subuid >/dev/null
+    fi
+    if ! grep -q "^root:" /etc/subgid 2>/dev/null; then
+        echo "root:1000000:1000000000" | sudo tee -a /etc/subgid >/dev/null
+    fi
     echo "[+] Initializing Incus daemon..."
+    sudo systemctl enable --now incus.socket 2>/dev/null || sudo systemctl enable --now incus 2>/dev/null || true
+    sudo systemctl restart incus 2>/dev/null || true
     sudo incus admin init --auto 2>/dev/null || true
 fi
 

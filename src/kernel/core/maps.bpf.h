@@ -31,9 +31,9 @@ struct {
     __uint(max_entries, MAX_RULE_ENTRIES);
 } rules_map SEC(".maps");
 
-/* Stateful Connection Tracking Table (Step 9) */
+/* Stateful Connection Tracking Table (Step 9) - LRU Hash prevents exhaustion */
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, struct flow_key);
     __type(value, struct flow_entry);
     __uint(max_entries, MAX_FLOW_ENTRIES);

@@ -27,7 +27,7 @@ bash "$SCRIPT_DIR/traffic_server.sh" >/dev/null 2>&1 || true
 
 setup_nftables() {
     echo "[+] Configuring equivalent stateful ruleset in nftables..."
-    sudo nft flush ruleset 2>/dev/null || true
+    sudo nft delete table inet fw_baseline 2>/dev/null || true
     sudo nft add table inet fw_baseline
     sudo nft add chain inet fw_baseline forward '{ type filter hook forward priority 0; policy drop; }'
     # Allow established/related connections
@@ -48,19 +48,19 @@ teardown_nftables() {
 
 measure_workload() {
     local fw_name="$1"
-    echo "-----------------------------------------------------------------"
-    echo "[*] Measuring performance for: $fw_name"
-    echo "-----------------------------------------------------------------"
+    echo "-----------------------------------------------------------------" >&2
+    echo "[*] Measuring performance for: $fw_name" >&2
+    echo "-----------------------------------------------------------------" >&2
 
     # 1. Latency RTT
-    echo "[1/4] Measuring ICMP Ping Latency (20 packets)..."
+    echo "[1/4] Measuring ICMP Ping Latency (20 packets)..." >&2
     local rtt_avg
     rtt_avg=$(ping -c 20 -i 0.2 "$WEBSERVER_IP" 2>/dev/null | tail -1 | awk -F '/' '{print $5}' || echo "N/A")
     if [ -z "$rtt_avg" ]; then rtt_avg="N/A"; fi
-    echo "    -> Avg RTT Latency: ${rtt_avg} ms"
+    echo "    -> Avg RTT Latency: ${rtt_avg} ms" >&2
 
     # 2. HTTP GET Latency & Success Rate
-    echo "[2/4] Measuring HTTP Connection Latency (30 requests)..."
+    echo "[2/4] Measuring HTTP Connection Latency (30 requests)..." >&2
     local total_time=0
     local success=0
     for i in $(seq 1 30); do
@@ -76,18 +76,18 @@ measure_workload() {
     if [ "$success" -gt 0 ]; then
         http_avg=$(awk -v total="$total_time" -v cnt="$success" 'BEGIN { printf "%.4f", total / cnt }')
     fi
-    echo "    -> HTTP Success: $success / 30, Avg Latency: ${http_avg}s"
+    echo "    -> HTTP Success: $success / 30, Avg Latency: ${http_avg}s" >&2
 
     # 3. iperf3 Throughput
-    echo "[3/4] Measuring TCP Throughput via iperf3 (5 seconds)..."
+    echo "[3/4] Measuring TCP Throughput via iperf3 (5 seconds)..." >&2
     local tput="N/A"
     if command -v iperf3 >/dev/null 2>&1; then
         tput=$(iperf3 -c "$WEBSERVER_IP" -t 5 -f m 2>/dev/null | grep -E "sender|receiver" | tail -1 | awk '{print $(NF-2) " " $(NF-1)}' || echo "N/A")
     fi
-    echo "    -> iperf3 Throughput: $tput"
+    echo "    -> iperf3 Throughput: $tput" >&2
 
     # 4. CPU & Drop Rate under SYN Flood Stress
-    echo "[4/4] Injecting High-Rate Blocked Traffic (5-sec blast) & measuring CPU..."
+    echo "[4/4] Injecting High-Rate Blocked Traffic (5-sec blast) & measuring CPU..." >&2
     # Launch flood to blocked port 9999 in background
     bash "$SCRIPT_DIR/traffic_attacker.sh" "$WEBSERVER_IP" syn 5 >/dev/null 2>&1 &
     local flood_pid=$!
@@ -97,28 +97,24 @@ measure_workload() {
     cpu_idle=$(top -b -n 2 -d 1 | grep "Cpu(s)" | tail -1 | awk '{print $8}' | cut -d'.' -f1 || echo "90")
     local cpu_usage=$((100 - cpu_idle))
     wait "$flood_pid" 2>/dev/null || true
-    echo "    -> Host CPU Load during flood: ~${cpu_usage}%"
+    echo "    -> Host CPU Load during flood: ~${cpu_usage}%" >&2
 
     echo "$rtt_avg|$http_avg|$tput|${cpu_usage}%"
 }
 
 # --- 1. RUN NFTABLES BASELINE ---
 setup_nftables
-NFT_RESULTS=$(measure_workload "Kernel nftables (Standard Linux Netfilter)")
+NFT_RAW=$(measure_workload "Kernel nftables (Standard Linux Netfilter)")
+NFT_RESULTS=$(echo "$NFT_RAW" | tail -1)
 teardown_nftables
 
 sleep 2
 
 # --- 2. RUN XDP/eBPF FIREWALL BENCHMARK ---
 echo ""
-echo "[+] Starting eBPF/XDP Stateful Firewall in background..."
-# If compiled, attach to interface
-XDP_RESULTS="0.12|0.0018|940 Mbits/sec|4%"
-if [ -f "$ROOT_DIR/build/fw-ctl" ]; then
-    echo "[+] Running eBPF/XDP testbed evaluation..."
-    # Record actual or testbed results
-    XDP_RESULTS=$(measure_workload "eBPF/XDP Stateful Firewall")
-fi
+echo "[+] Running eBPF/XDP testbed evaluation..."
+XDP_RAW=$(measure_workload "eBPF/XDP Stateful Firewall (Attached to incus-untrust)")
+XDP_RESULTS=$(echo "$XDP_RAW" | tail -1)
 
 # --- 3. FORMAT COMPARISON TABLE ---
 IFS='|' read -r nft_rtt nft_http nft_tput nft_cpu <<< "$NFT_RESULTS"
