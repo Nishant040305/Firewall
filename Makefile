@@ -40,15 +40,29 @@ CTL_ALIAS = $(BUILD_DIR)/firewallctl
 
 .PHONY: all bpf userspace clean
 
-all: $(BUILD_DIR) $(BPF_OBJ) $(USER_BIN)
+BPF_PASS_SRC = src/kernel/xdp_pass.bpf.c
+BPF_PASS_OBJ = $(BUILD_DIR)/xdp_pass.bpf.o
+BPF_FAST_OBJ = $(BUILD_DIR)/firewall_fast.bpf.o
+BPF_ZERO_OBJ = $(BUILD_DIR)/firewall_zero_obs.bpf.o
+
+all: $(BUILD_DIR) $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ) $(USER_BIN)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/core $(BUILD_DIR)/utils $(BUILD_DIR)/protocols $(BUILD_DIR)/telemetry
 
-bpf: $(BPF_OBJ)
+bpf: $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ)
 
 $(BPF_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
 	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
+
+$(BPF_PASS_OBJ): $(BPF_PASS_SRC) | $(BUILD_DIR)
+	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
+
+$(BPF_FAST_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
+	$(CLANG) $(BPF_CFLAGS) -DMINIMAL_OBSERVABILITY -c $< -o $@
+
+$(BPF_ZERO_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
+	$(CLANG) $(BPF_CFLAGS) -DNO_OBSERVABILITY -DMINIMAL_OBSERVABILITY -c $< -o $@
 
 userspace: $(USER_BIN)
 

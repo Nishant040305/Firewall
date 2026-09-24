@@ -106,6 +106,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         inc_stat(STAT_DROPPED_PACKETS);
     }
 
+#ifndef MINIMAL_OBSERVABILITY
     /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
     if (decision == ACTION_DROP ||
         pkt->conn_state == CONN_STATE_SYN_SENT ||
@@ -116,6 +117,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         (pkt->proto == IPPROTO_TCP && (pkt->tcp_flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST)))) {
         emit_packet_event(pkt);
     }
+#endif
     return decision;
 }
 

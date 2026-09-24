@@ -79,8 +79,8 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
     /* 2. Check for existing connection */
     if (entry) {
-        /* Check timeout */
-        if (now - entry->last_seen_ns > entry->timeout_ns) {
+        /* Check timeout (guard against multi-core clock skew underflow: now > entry->last_seen_ns) */
+        if (now > entry->last_seen_ns && (now - entry->last_seen_ns > entry->timeout_ns)) {
             inc_stat(STAT_CONN_TIMEOUT);
             bpf_map_delete_elem(&conntrack_map, &fwd_key);
             bpf_map_delete_elem(&conntrack_map, &rev_key);
@@ -93,7 +93,9 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         /* TCP SYN-ACK Response from Server */
         if ((flags & TCP_FLAG_SYN) && (flags & TCP_FLAG_ACK)) {
             entry->state = CONN_STATE_SYN_RECV;
-            entry->last_seen_ns = now;
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
             entry->packets_reverse += 1;
             entry->bytes_reverse += pkt->pkt_len;
             entry->flags_seen |= flags;
@@ -103,7 +105,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             struct flow_entry *fwd_ent = bpf_map_lookup_elem(&conntrack_map, &rev_key);
             if (fwd_ent) {
                 fwd_ent->state = CONN_STATE_SYN_RECV;
-                fwd_ent->last_seen_ns = now;
+                if (now > fwd_ent->last_seen_ns) {
+                    fwd_ent->last_seen_ns = now;
+                }
+                fwd_ent->timeout_ns = TCP_SYN_TIMEOUT_NS;
             }
 
             pkt->action = ACTION_PASS;
@@ -123,9 +128,13 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                     peer_ent->state = CONN_STATE_ESTABLISHED;
                     peer_ent->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
                 }
+            } else if (entry->state == CONN_STATE_ESTABLISHED) {
+                entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
             }
 
-            entry->last_seen_ns = now;
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
             entry->packets_forward += 1;
             entry->bytes_forward += pkt->pkt_len;
             entry->flags_seen |= flags;
@@ -147,7 +156,9 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Handle standalone RST or FIN */
         if (flags & (TCP_FLAG_RST | TCP_FLAG_FIN)) {
-            entry->last_seen_ns = now;
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
             entry->state = (flags & TCP_FLAG_RST) ? CONN_STATE_CLOSED : CONN_STATE_FIN_WAIT;
             entry->timeout_ns = TCP_CLOSE_TIMEOUT_NS;
             pkt->action = ACTION_PASS;
@@ -157,7 +168,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Other valid packets on established flow */
         if (entry->state == CONN_STATE_ESTABLISHED) {
-            entry->last_seen_ns = now;
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
+            entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
             entry->packets_forward += 1;
             entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;
@@ -182,8 +196,10 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 
     struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
     if (entry) {
-        if (now - entry->last_seen_ns <= entry->timeout_ns) {
-            entry->last_seen_ns = now;
+        if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
             entry->packets_forward += 1;
             entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;
@@ -246,8 +262,10 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
 
     struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
     if (entry) {
-        if (now - entry->last_seen_ns <= entry->timeout_ns) {
-            entry->last_seen_ns = now;
+        if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
+            if (now > entry->last_seen_ns) {
+                entry->last_seen_ns = now;
+            }
             entry->packets_forward += 1;
             entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;

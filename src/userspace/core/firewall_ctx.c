@@ -107,7 +107,8 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     config_dump(&ctx->config);
 
     /* 5. Load BPF Object & Attach Hook (XDP / TC) */
-    const char *bpf_obj = "build/firewall.bpf.o";
+    const char *bpf_obj = getenv("BPF_OBJ") ? getenv("BPF_OBJ") : "build/firewall.bpf.o";
+    printf("[*] Loading eBPF object: %s\n", bpf_obj);
     if (bpf_loader_init(&ctx->loader, bpf_obj, &ctx->config) < 0) {
         return -1;
     }

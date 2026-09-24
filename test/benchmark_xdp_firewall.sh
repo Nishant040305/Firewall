@@ -69,6 +69,14 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 
+# Automatically restore file ownership to the invoking non-root user upon exit
+fix_permissions() {
+    if [ -n "${SUDO_USER:-}" ]; then
+        chown -R "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$RESULTS_DIR" 2>/dev/null || true
+    fi
+}
+trap fix_permissions EXIT
+
 # Resolve incus command
 INCUS_CMD=""
 if incus list >/dev/null 2>&1; then

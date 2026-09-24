@@ -8,6 +8,9 @@
 #include "context.bpf.h"
 #include "maps.bpf.h"
 
+#ifdef NO_OBSERVABILITY
+#define inc_stat(counter_key) do {} while (0)
+#else
 /* Increment per-CPU stats counter safely */
 static __always_inline void inc_stat(__u32 counter_key)
 {
@@ -16,6 +19,7 @@ static __always_inline void inc_stat(__u32 counter_key)
         *val += 1;
     }
 }
+#endif
 
 /* Construct forward 5-tuple flow key */
 static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow_key *key)
