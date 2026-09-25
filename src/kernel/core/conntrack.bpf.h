@@ -101,16 +101,6 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             entry->flags_seen |= flags;
             entry->timeout_ns = TCP_SYN_TIMEOUT_NS;
 
-            /* Also update corresponding forward entry */
-            struct flow_entry *fwd_ent = bpf_map_lookup_elem(&conntrack_map, &rev_key);
-            if (fwd_ent) {
-                fwd_ent->state = CONN_STATE_SYN_RECV;
-                if (now > fwd_ent->last_seen_ns) {
-                    fwd_ent->last_seen_ns = now;
-                }
-                fwd_ent->timeout_ns = TCP_SYN_TIMEOUT_NS;
-            }
-
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_SYN_RECV;
             return ACTION_PASS;
@@ -119,34 +109,36 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         /* TCP ACK or Data packet */
         if (flags & TCP_FLAG_ACK) {
             if (entry->state == CONN_STATE_SYN_RECV || entry->state == CONN_STATE_SYN_SENT) {
+                /* State transition: write is mandatory */
                 entry->state = CONN_STATE_ESTABLISHED;
                 entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
-                inc_stat(STAT_CONN_ESTABLISHED);
-
-                struct flow_entry *peer_ent = bpf_map_lookup_elem(&conntrack_map, &rev_key);
-                if (peer_ent) {
-                    peer_ent->state = CONN_STATE_ESTABLISHED;
-                    peer_ent->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
-                }
-            } else if (entry->state == CONN_STATE_ESTABLISHED) {
-                entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
-            }
-
-            if (now > entry->last_seen_ns) {
                 entry->last_seen_ns = now;
+                entry->packets_forward += 1;
+                entry->bytes_forward += pkt->pkt_len;
+                entry->flags_seen |= flags;
+                inc_stat(STAT_CONN_ESTABLISHED);
+            } else if (entry->state == CONN_STATE_ESTABLISHED) {
+                /* Hot data path: only write if refresh interval elapsed (lazy refresh)
+                 * This converts ~99% of data packets from locked read+write to lock-free read-only */
+                if (now > entry->last_seen_ns &&
+                    (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
+                    entry->last_seen_ns = now;
+                    entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
+                    entry->packets_forward += 1;
+                    entry->bytes_forward += pkt->pkt_len;
+                }
             }
-            entry->packets_forward += 1;
-            entry->bytes_forward += pkt->pkt_len;
-            entry->flags_seen |= flags;
 
-            /* Handle connection termination (FIN / RST) */
+            /* Handle connection termination (FIN / RST) — always write */
             if (flags & TCP_FLAG_RST) {
                 entry->state = CONN_STATE_CLOSED;
                 entry->timeout_ns = TCP_CLOSE_TIMEOUT_NS;
+                entry->last_seen_ns = now;
                 inc_stat(STAT_CONN_CLOSED);
             } else if (flags & TCP_FLAG_FIN) {
                 entry->state = CONN_STATE_FIN_WAIT;
                 entry->timeout_ns = TCP_CLOSE_TIMEOUT_NS;
+                entry->last_seen_ns = now;
             }
 
             pkt->action = ACTION_PASS;
@@ -168,12 +160,14 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Other valid packets on established flow */
         if (entry->state == CONN_STATE_ESTABLISHED) {
-            if (now > entry->last_seen_ns) {
+            /* Lazy refresh: only write if interval elapsed */
+            if (now > entry->last_seen_ns &&
+                (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
+                entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
+                entry->packets_forward += 1;
+                entry->bytes_forward += pkt->pkt_len;
             }
-            entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
-            entry->packets_forward += 1;
-            entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_ESTABLISHED;
             return ACTION_PASS;
@@ -197,11 +191,13 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
     struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
     if (entry) {
         if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
-            if (now > entry->last_seen_ns) {
+            /* Lazy refresh: only write if interval elapsed */
+            if (now > entry->last_seen_ns &&
+                (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
+                entry->packets_forward += 1;
+                entry->bytes_forward += pkt->pkt_len;
             }
-            entry->packets_forward += 1;
-            entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_UDP_ACTIVE;
             return ACTION_PASS;
@@ -263,11 +259,13 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
     struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
     if (entry) {
         if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
-            if (now > entry->last_seen_ns) {
+            /* Lazy refresh: only write if interval elapsed */
+            if (now > entry->last_seen_ns &&
+                (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
+                entry->packets_forward += 1;
+                entry->bytes_forward += pkt->pkt_len;
             }
-            entry->packets_forward += 1;
-            entry->bytes_forward += pkt->pkt_len;
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_ICMP_ACTIVE;
             return ACTION_PASS;

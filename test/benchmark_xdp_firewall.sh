@@ -102,15 +102,34 @@ fi
 
 disable_offloads() {
     # Disable TSO/GSO/GRO on all host interfaces to remove virtual 64KB RAM copy distortion
-    for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
-        if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-            ethtool -K "$dev" tso off gso off gro off rx off tx off 2>/dev/null || true
-        fi
-    done
-    # Disable on container eth0 interfaces
-    for c in client attacker webserver; do
-        $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off 2>/dev/null || true
-    done
+    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
+    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+    #         ethtool -K "$dev" tso off gso off gro off rx off tx off 2>/dev/null || true
+    #     fi
+    # done
+    # # Disable on container eth0 interfaces
+    # for c in client attacker webserver; do
+    #     $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off 2>/dev/null || true
+    #     $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
+    # done
+
+    # # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
+    # local num_cpus
+    # num_cpus=$(nproc 2>/dev/null || echo "20")
+    # local rps_mask
+    # rps_mask=$(printf "%x" $(( (1 << num_cpus) - 1 )) 2>/dev/null || echo "fffff")
+    # sysctl -w net.core.rps_sock_flow_entries=32768 >/dev/null 2>&1 || true
+
+    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}"; do
+    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+    #         ip link set "$dev" txqueuelen 3000 2>/dev/null || true
+    #         if [ -d "/sys/class/net/$dev/queues/rx-0" ]; then
+    #             echo "$rps_mask" > "/sys/class/net/$dev/queues/rx-0/rps_cpus" 2>/dev/null || true
+    #             echo 4096 > "/sys/class/net/$dev/queues/rx-0/rps_flow_cnt" 2>/dev/null || true
+    #         fi
+    #     fi
+    # done
+    echo "[+] Offload and RPS settings applied (if supported)."
 }
 
 # Terminal colors
