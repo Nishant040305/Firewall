@@ -37,6 +37,7 @@ struct {
     __type(key, struct flow_key);
     __type(value, struct flow_entry);
     __uint(max_entries, MAX_FLOW_ENTRIES);
+    __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } conntrack_map SEC(".maps");
 
 #endif /* __CORE_MAPS_BPF_H__ */
