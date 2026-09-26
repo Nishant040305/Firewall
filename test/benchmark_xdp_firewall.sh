@@ -101,17 +101,17 @@ if [ -z "$CLIENT_VETH" ]; then
 fi
 
 disable_offloads() {
-    # Disable TSO/GSO/GRO on all host interfaces to remove virtual 64KB RAM copy distortion
-    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
-    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-    #         ethtool -K "$dev" tso off gso off gro off rx off tx off 2>/dev/null || true
-    #     fi
-    # done
-    # # Disable on container eth0 interfaces
-    # for c in client attacker webserver; do
-    #     $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off 2>/dev/null || true
-    #     $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
-    # done
+    # Disable TSO/GSO/GRO/SG on all host interfaces to enforce discrete 1500-byte frame semantics
+    for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
+        if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+            ethtool -K "$dev" tso off gso off gro off rx off tx off sg off 2>/dev/null || true
+        fi
+    done
+
+    # Disable on container eth0 interfaces
+    for c in client attacker webserver; do
+        $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off sg off 2>/dev/null || true
+    done
 
     # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
     local num_cpus
@@ -134,7 +134,7 @@ disable_offloads() {
         $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
     done
 
-    echo "[+] Queue lengths and RPS multi-core steering applied."
+    echo "[+] Offloads (TSO/GSO/GRO/SG) disabled and RPS multi-core steering preserved."
 }
 
 # Terminal colors

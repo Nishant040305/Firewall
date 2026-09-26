@@ -78,14 +78,33 @@ for c in webserver attacker client admin; do
     ' || true
 done
 
-$INCUS_CMD exec webserver -- sh -c 'apt-get update -y && apt-get install -y nginx curl tcpdump iperf3' || true
-$INCUS_CMD exec attacker -- sh -c 'apt-get update -y && apt-get install -y hping3 nmap curl iperf3 netcat-openbsd' || true
-$INCUS_CMD exec client -- sh -c 'apt-get update -y && apt-get install -y curl iperf3 hping3' || true
-$INCUS_CMD exec admin -- sh -c 'apt-get update -y && apt-get install -y curl tcpdump nmap' || true
+$INCUS_CMD exec webserver -- sh -c 'apt-get update -y && apt-get install -y nginx curl tcpdump iperf3 ethtool' || true
+$INCUS_CMD exec attacker -- sh -c 'apt-get update -y && apt-get install -y hping3 nmap curl iperf3 netcat-openbsd ethtool' || true
+$INCUS_CMD exec client -- sh -c 'apt-get update -y && apt-get install -y curl iperf3 hping3 ethtool' || true
+$INCUS_CMD exec admin -- sh -c 'apt-get update -y && apt-get install -y curl tcpdump nmap ethtool' || true
 
 echo "[+] Isolating untrusted and protected networks (disabling NAT)..."
 $INCUS_CMD network set incus-untrust ipv4.nat=false || true
 $INCUS_CMD network set incus-protect ipv4.nat=false || true
 
+echo "[+] Disabling hardware/virtual offloads (TSO/GSO/GRO/SG) by default..."
+for c in webserver attacker client admin; do
+    # Inside container eth0
+    $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off sg off 2>/dev/null || true
+
+    # Host veth peer
+    veth=$($INCUS_CMD config get "$c" volatile.eth0.host_name 2>/dev/null || true)
+    if [ -n "$veth" ] && ip link show "$veth" >/dev/null 2>&1; then
+        sudo ethtool -K "$veth" tso off gso off gro off rx off tx off sg off 2>/dev/null || true
+    fi
+done
+
+for br in incus-untrust incus-protect incus-mgmt; do
+    if ip link show "$br" >/dev/null 2>&1; then
+        sudo ethtool -K "$br" tso off gso off gro off rx off tx off sg off 2>/dev/null || true
+    fi
+done
+
 echo "[+] Setup complete! Container status:"
 $INCUS_CMD list
+
