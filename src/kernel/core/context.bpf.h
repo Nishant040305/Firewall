@@ -6,8 +6,9 @@
 #include <linux/ip.h>
 #include <bpf/bpf_helpers.h>
 #include <core/types.h>
+#include <core/conntrack.h>
 
-/* Unified Packet Processing Context */
+/* Unified Packet Processing Context (Streamlined for fast-path parsing) */
 struct pkt_ctx {
     void *data;
     void *data_end;
@@ -15,17 +16,21 @@ struct pkt_ctx {
     __u16 eth_proto;
     __u8  direction;
     __u8  proto;
-    struct ethhdr *eth;
-    struct iphdr  *iph;
-    void *l4_hdr;
-    __u32 src_ip;
-    __u32 dst_ip;
-    __u16 src_port;
-    __u16 dst_port;
     __u8  tcp_flags;
     __u8  action;
     __u8  conn_state;
+    __u8  _pad;
     __u32 rule_id;
+    void *l4_hdr;
+    union {
+        struct flow_key flow;
+        struct {
+            __u32 src_ip;
+            __u32 dst_ip;
+            __u16 src_port;
+            __u16 dst_port;
+        };
+    };
 };
 
 /* Initialize packet context from raw XDP metadata (Ingress only) */
@@ -35,19 +40,13 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->data_end = (void *)(long)ctx->data_end;
     pctx->pkt_len = (__u32)(pctx->data_end - pctx->data);
     pctx->direction = DIR_INGRESS;
-    pctx->eth_proto = 0;
-    pctx->proto = 0;
-    pctx->eth = NULL;
-    pctx->iph = NULL;
-    pctx->l4_hdr = NULL;
-    pctx->src_ip = 0;
-    pctx->dst_ip = 0;
-    pctx->src_port = 0;
-    pctx->dst_port = 0;
-    pctx->tcp_flags = 0;
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->tcp_flags = 0;
+    pctx->flow.pad[0] = 0;
+    pctx->flow.pad[1] = 0;
+    pctx->flow.pad[2] = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
@@ -68,19 +67,13 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->data_end = (void *)(long)skb->data_end;
     pctx->pkt_len = skb->len;
     pctx->direction = direction;
-    pctx->eth_proto = 0;
-    pctx->proto = 0;
-    pctx->eth = NULL;
-    pctx->iph = NULL;
-    pctx->l4_hdr = NULL;
-    pctx->src_ip = 0;
-    pctx->dst_ip = 0;
-    pctx->src_port = 0;
-    pctx->dst_port = 0;
-    pctx->tcp_flags = 0;
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->tcp_flags = 0;
+    pctx->flow.pad[0] = 0;
+    pctx->flow.pad[1] = 0;
+    pctx->flow.pad[2] = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;

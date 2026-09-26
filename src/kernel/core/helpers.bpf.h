@@ -41,17 +41,10 @@ static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
     return h;
 }
 
-/* Construct forward 5-tuple flow key */
+/* Construct forward 5-tuple flow key (direct struct copy from pre-populated pkt->flow) */
 static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow_key *key)
 {
-    key->src_ip = pkt->src_ip;
-    key->dst_ip = pkt->dst_ip;
-    key->src_port = pkt->src_port;
-    key->dst_port = pkt->dst_port;
-    key->proto = pkt->proto;
-    key->pad[0] = 0;
-    key->pad[1] = 0;
-    key->pad[2] = 0;
+    *key = pkt->flow;
 }
 
 /* Construct reverse 5-tuple flow key */

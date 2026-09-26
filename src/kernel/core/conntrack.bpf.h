@@ -25,26 +25,23 @@
 /* Process TCP state machine (Step 9) */
 static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    struct flow_key fwd_key, rev_key;
-    make_flow_key(pkt, &fwd_key);
-    make_reverse_flow_key(pkt, &rev_key);
-
+    const struct flow_key *fwd_key = &pkt->flow;
     __u8 flags = pkt->tcp_flags;
 
     /* 1. L1 Fast-Path Cache Lookup (Per-CPU Direct-Indexed Array) */
-    __u32 flow_hash = calc_flow_hash(&fwd_key);
+    __u32 flow_hash = calc_flow_hash(fwd_key);
     __u32 cache_idx = flow_hash & FLOW_CACHE_MASK;
     struct flow_cache_entry *cached = bpf_map_lookup_elem(&flow_cache_map, &cache_idx);
 
     if (cached && !(flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST))) {
-        if (flow_keys_equal(&cached->key, &fwd_key) &&
+        if (flow_keys_equal(&cached->key, fwd_key) &&
             cached->state == CONN_STATE_ESTABLISHED &&
             (now <= cached->last_seen_ns || (now - cached->last_seen_ns <= cached->timeout_ns))) {
 
             /* Fast Path Hit! Zero locks, zero hash bucket traversal, immediate pass */
             if (now > cached->last_seen_ns && (now - cached->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 cached->last_seen_ns = now;
-                struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+                struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
                 if (entry) {
                     entry->last_seen_ns = now;
                     entry->packets_forward += 1;
@@ -59,11 +56,11 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
     }
 
     /* 2. Fast Path Miss -> Authoritative LRU Hash Table Lookup */
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
 
     /* 2a. TCP SYN (Initial connection request) */
     if ((flags & TCP_FLAG_SYN) && !(flags & TCP_FLAG_ACK)) {
-        if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
+        if (cached && flow_keys_equal(&cached->key, fwd_key)) {
             cached->state = CONN_STATE_INVALID;
             cached->key.proto = 0;
         }
@@ -89,9 +86,11 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, &fwd_key, &new_entry, BPF_ANY);
+        bpf_map_update_elem(&conntrack_map, fwd_key, &new_entry, BPF_ANY);
 
-        /* Create reverse flow entry awaiting SYN-ACK */
+        /* Create reverse flow entry awaiting SYN-ACK (LAZY ALLOCATION) */
+        struct flow_key rev_key;
+        make_reverse_flow_key(pkt, &rev_key);
         struct flow_entry rev_entry = {
             .state = CONN_STATE_SYN_SENT,
             .flags_seen = 0,
@@ -115,10 +114,12 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
     if (entry) {
         /* Check timeout (guard against multi-core clock skew underflow: now > entry->last_seen_ns) */
         if (now > entry->last_seen_ns && (now - entry->last_seen_ns > entry->timeout_ns)) {
+            struct flow_key rev_key;
+            make_reverse_flow_key(pkt, &rev_key);
             inc_stat(STAT_CONN_TIMEOUT);
-            bpf_map_delete_elem(&conntrack_map, &fwd_key);
+            bpf_map_delete_elem(&conntrack_map, fwd_key);
             bpf_map_delete_elem(&conntrack_map, &rev_key);
-            if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
+            if (cached && flow_keys_equal(&cached->key, fwd_key)) {
                 cached->state = CONN_STATE_CLOSED;
                 cached->key.proto = 0;
             }
@@ -158,7 +159,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
                 /* Populate L1 cache on handshake completion */
                 if (cached) {
-                    cached->key = fwd_key;
+                    cached->key = *fwd_key;
                     cached->state = CONN_STATE_ESTABLISHED;
                     cached->last_seen_ns = now;
                     cached->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
@@ -166,7 +167,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             } else if (entry->state == CONN_STATE_ESTABLISHED) {
                 /* Populate L1 cache on miss */
                 if (cached) {
-                    cached->key = fwd_key;
+                    cached->key = *fwd_key;
                     cached->state = CONN_STATE_ESTABLISHED;
                     cached->last_seen_ns = now;
                     cached->timeout_ns = entry->timeout_ns;
@@ -183,7 +184,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
             /* Handle connection termination (FIN / RST) */
             if (flags & (TCP_FLAG_RST | TCP_FLAG_FIN)) {
-                if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
+                if (cached && flow_keys_equal(&cached->key, fwd_key)) {
                     cached->state = CONN_STATE_CLOSED;
                     cached->key.proto = 0;
                 }
@@ -206,7 +207,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Handle standalone RST or FIN */
         if (flags & (TCP_FLAG_RST | TCP_FLAG_FIN)) {
-            if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
+            if (cached && flow_keys_equal(&cached->key, fwd_key)) {
                 cached->state = CONN_STATE_CLOSED;
                 cached->key.proto = 0;
             }
@@ -224,7 +225,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         /* Other valid packets on established flow */
         if (entry->state == CONN_STATE_ESTABLISHED) {
             if (cached) {
-                cached->key = fwd_key;
+                cached->key = *fwd_key;
                 cached->state = CONN_STATE_ESTABLISHED;
                 cached->last_seen_ns = now;
                 cached->timeout_ns = entry->timeout_ns;
@@ -253,22 +254,20 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 /* Process UDP pseudo-connection state (Step 9) */
 static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    struct flow_key fwd_key, rev_key;
-    make_flow_key(pkt, &fwd_key);
-    make_reverse_flow_key(pkt, &rev_key);
+    const struct flow_key *fwd_key = &pkt->flow;
 
     /* 1. L1 Fast-Path Cache Lookup */
-    __u32 flow_hash = calc_flow_hash(&fwd_key);
+    __u32 flow_hash = calc_flow_hash(fwd_key);
     __u32 cache_idx = flow_hash & FLOW_CACHE_MASK;
     struct flow_cache_entry *cached = bpf_map_lookup_elem(&flow_cache_map, &cache_idx);
 
-    if (cached && flow_keys_equal(&cached->key, &fwd_key) &&
+    if (cached && flow_keys_equal(&cached->key, fwd_key) &&
         cached->state == CONN_STATE_UDP_ACTIVE &&
         (now <= cached->last_seen_ns || (now - cached->last_seen_ns <= cached->timeout_ns))) {
 
         if (now > cached->last_seen_ns && (now - cached->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
             cached->last_seen_ns = now;
-            struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+            struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
             if (entry) {
                 entry->last_seen_ns = now;
                 entry->packets_forward += 1;
@@ -282,12 +281,12 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
     }
 
     /* 2. Fast Path Miss -> Authoritative conntrack_map Lookup */
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
 
     if (entry) {
         if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
             if (cached) {
-                cached->key = fwd_key;
+                cached->key = *fwd_key;
                 cached->state = CONN_STATE_UDP_ACTIVE;
                 cached->last_seen_ns = now;
                 cached->timeout_ns = entry->timeout_ns;
@@ -305,11 +304,13 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
             return ACTION_PASS;
         }
         /* Expired */
-        if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
+        if (cached && flow_keys_equal(&cached->key, fwd_key)) {
             cached->state = CONN_STATE_CLOSED;
             cached->key.proto = 0;
         }
-        bpf_map_delete_elem(&conntrack_map, &fwd_key);
+        struct flow_key rev_key;
+        make_reverse_flow_key(pkt, &rev_key);
+        bpf_map_delete_elem(&conntrack_map, fwd_key);
         bpf_map_delete_elem(&conntrack_map, &rev_key);
     }
 
@@ -322,7 +323,7 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
         return ACTION_DROP;
     }
 
-    /* Create forward and reverse UDP state entries */
+    /* Create forward and reverse UDP state entries (Lazy Reverse Allocation) */
     struct flow_entry new_fwd = {
         .state = CONN_STATE_UDP_ACTIVE,
         .flags_seen = 0,
@@ -334,8 +335,10 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
         .bytes_reverse = 0,
         .timeout_ns = UDP_TIMEOUT_NS,
     };
-    bpf_map_update_elem(&conntrack_map, &fwd_key, &new_fwd, BPF_ANY);
+    bpf_map_update_elem(&conntrack_map, fwd_key, &new_fwd, BPF_ANY);
 
+    struct flow_key rev_key;
+    make_reverse_flow_key(pkt, &rev_key);
     struct flow_entry new_rev = {
         .state = CONN_STATE_UDP_ACTIVE,
         .flags_seen = 0,
@@ -351,7 +354,7 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 
     /* Populate L1 cache for new UDP flow */
     if (cached) {
-        cached->key = fwd_key;
+        cached->key = *fwd_key;
         cached->state = CONN_STATE_UDP_ACTIVE;
         cached->last_seen_ns = now;
         cached->timeout_ns = UDP_TIMEOUT_NS;
@@ -366,11 +369,9 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 /* Process ICMP Echo session state (Step 9) */
 static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    struct flow_key fwd_key, rev_key;
-    make_flow_key(pkt, &fwd_key);
-    make_reverse_flow_key(pkt, &rev_key);
+    const struct flow_key *fwd_key = &pkt->flow;
 
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
     if (entry) {
         if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
             /* Lazy refresh: only write if interval elapsed */
@@ -384,7 +385,9 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
             pkt->conn_state = CONN_STATE_ICMP_ACTIVE;
             return ACTION_PASS;
         }
-        bpf_map_delete_elem(&conntrack_map, &fwd_key);
+        struct flow_key rev_key;
+        make_reverse_flow_key(pkt, &rev_key);
+        bpf_map_delete_elem(&conntrack_map, fwd_key);
         bpf_map_delete_elem(&conntrack_map, &rev_key);
     }
 
@@ -408,8 +411,10 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
         .bytes_reverse = 0,
         .timeout_ns = ICMP_TIMEOUT_NS,
     };
-    bpf_map_update_elem(&conntrack_map, &fwd_key, &new_fwd, BPF_ANY);
+    bpf_map_update_elem(&conntrack_map, fwd_key, &new_fwd, BPF_ANY);
 
+    struct flow_key rev_key;
+    make_reverse_flow_key(pkt, &rev_key);
     struct flow_entry new_rev = {
         .state = CONN_STATE_ICMP_ACTIVE,
         .flags_seen = 0,

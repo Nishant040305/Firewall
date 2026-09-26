@@ -66,7 +66,7 @@ run_test "2" "Traffic on Blocked Port is Dropped (e.g., Port 8080 / Port 22)"
 
 echo "[2.1] Attempting connection to unauthorized port 8080 (Blocked by policy)..."
 blocked_code=$(curl -s -o /dev/null -w "%{http_code}" "http://${TARGET_IP}:8080/" --connect-timeout 2 2>/dev/null || echo "TIMEOUT")
-if [ "$blocked_code" = "TIMEOUT" ] || [ "$blocked_code" = "000" ]; then
+if [ "$blocked_code" = "TIMEOUT" ] || [ "$blocked_code" = "000" ] || [ "$blocked_code" = "000TIMEOUT" ]; then
     echo "    -> [PASS] Connection timed out / packet dropped as expected (No SYN-ACK received)"
     PASSED=$((PASSED + 1))
 else

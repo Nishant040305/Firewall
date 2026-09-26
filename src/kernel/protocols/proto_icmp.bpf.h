@@ -14,6 +14,7 @@ static __always_inline int parse_icmp(struct pkt_ctx *pkt)
 
     pkt->src_port = 0;
     pkt->dst_port = 0;
+    pkt->tcp_flags = 0;
     return 0;
 }
 

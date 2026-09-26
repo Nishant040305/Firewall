@@ -8,7 +8,7 @@ MULTIARCH ?= $(shell gcc -print-multiarch 2>/dev/null)
 ARCH_INC := $(if $(MULTIARCH),-I/usr/include/$(MULTIARCH),)
 
 RAW_ARCH ?= $(shell uname -m)
-BPF_CFLAGS ?= -O2 -g -Wall -target bpf -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -I/usr/include -Iinclude -Isrc/kernel
+BPF_CFLAGS ?= -O2 -g -Wall -target bpf -mcpu=v3 -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -I/usr/include -Iinclude -Isrc/kernel
 
 BUILD_DIR = build
 

@@ -53,24 +53,17 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         return ACTION_DROP;
     }
 
-    inc_stat(STAT_TOTAL_PACKETS);
-    if (pkt->direction == DIR_INGRESS) {
-        inc_stat(STAT_INGRESS_PACKETS);
-    } else if (pkt->direction == DIR_EGRESS) {
-        inc_stat(STAT_EGRESS_PACKETS);
-    }
-
-    __u64 now = bpf_ktime_get_ns();
+    /* 3. L4: Protocol Parsing & Stateful Engine */
     int decision = ACTION_PASS;
+    __u64 now = 0;
 
-    /* 3. L4: Protocol Parsing & Stateful Engine (Steps 6, 7, 9) */
     switch (pkt->proto) {
     case IPPROTO_TCP:
         if (parse_tcp(pkt) < 0) {
             inc_stat(STAT_DROPPED_MALFORMED);
             decision = ACTION_DROP;
         } else {
-            inc_stat(STAT_TCP_PACKETS);
+            now = bpf_ktime_get_ns();
             decision = process_tcp_state(pkt, now);
         }
         break;
@@ -79,7 +72,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             inc_stat(STAT_DROPPED_MALFORMED);
             decision = ACTION_DROP;
         } else {
-            inc_stat(STAT_UDP_PACKETS);
+            now = bpf_ktime_get_ns();
             decision = process_udp_state(pkt, now);
         }
         break;
@@ -88,18 +81,34 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             inc_stat(STAT_DROPPED_MALFORMED);
             decision = ACTION_DROP;
         } else {
-            inc_stat(STAT_ICMP_PACKETS);
+            now = bpf_ktime_get_ns();
             decision = process_icmp_state(pkt, now);
         }
         break;
     default:
-        inc_stat(STAT_OTHER_PACKETS);
         decision = evaluate_rules(pkt);
         pkt->action = decision;
         break;
     }
 
-    /* 4. Update Statistics & Emit Telemetry Event */
+    /* 4. Update Statistics & Emit Telemetry Event (Consolidated after parsing) */
+    inc_stat(STAT_TOTAL_PACKETS);
+    if (pkt->direction == DIR_INGRESS) {
+        inc_stat(STAT_INGRESS_PACKETS);
+    } else if (pkt->direction == DIR_EGRESS) {
+        inc_stat(STAT_EGRESS_PACKETS);
+    }
+
+    if (pkt->proto == IPPROTO_TCP) {
+        inc_stat(STAT_TCP_PACKETS);
+    } else if (pkt->proto == IPPROTO_UDP) {
+        inc_stat(STAT_UDP_PACKETS);
+    } else if (pkt->proto == IPPROTO_ICMP) {
+        inc_stat(STAT_ICMP_PACKETS);
+    } else {
+        inc_stat(STAT_OTHER_PACKETS);
+    }
+
     if (decision == ACTION_PASS) {
         inc_stat(STAT_ALLOWED_PACKETS);
     } else {
