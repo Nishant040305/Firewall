@@ -54,6 +54,7 @@ struct bpf_loader_ctx {
     int rules_map_fd;
     int conntrack_map_fd;
     int conntrack_syn_map_fd;
+    int perf_map_fd;
 };
 
 /* Load BPF object, attach programs (TC or XDP, Ingress / Egress / Both), and fetch map FDs */

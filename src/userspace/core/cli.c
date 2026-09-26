@@ -22,7 +22,10 @@ void print_usage(const char *prog_name)
     printf("  %s conntrack list                             # View active connection state table\n", prog_name);
     printf("  %s conntrack flush                            # Flush active connection states\n", prog_name);
     printf("  %s stats show [--json]                        # Display packet & connection stats\n", prog_name);
-    printf("  %s stats reset                                # Reset statistics counters\n\n", prog_name);
+    printf("  %s stats reset                                # Reset statistics counters\n", prog_name);
+    printf("  %s perf show [--json]                         # Display component latency & timing analysis\n", prog_name);
+    printf("  %s perf reset                                 # Reset latency & performance metrics\n", prog_name);
+    printf("  %s telemetry log [file] [--interval <s>] [--json] # Log telemetry to file periodically\n\n", prog_name);
 
     printf("Daemon Options:\n");
     printf("  -i, --interface <iface>      Network interface to attach firewall (e.g. eth0, veth_server)\n");
@@ -30,6 +33,9 @@ void print_usage(const char *prog_name)
     printf("  -m, --mode <mode>            Hook mode: hybrid, tc, xdp (default: hybrid)\n");
     printf("  -c, --config <file>          Path to runtime config YAML (default: config/firewall.yaml)\n");
     printf("  -r, --rules <file>           Path to rules YAML (default: config/rules.yaml)\n");
+    printf("  -t, --telemetry-file <file>  Path to log telemetry periodically (default: benchmark_results/telemetry.log)\n");
+    printf("  -T, --telemetry-interval <s> Interval in seconds between telemetry logs (default: 5)\n");
+    printf("  -J, --telemetry-json         Write telemetry logs in JSON lines format\n");
     printf("  -h, --help                   Show this help message\n\n");
 
     printf("Rule Add Options:\n");
@@ -135,22 +141,52 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
                 opts->cmd = CMD_STATS_RESET;
                 return 0;
             }
+        } else if (strcmp(argv[1], "perf") == 0 || strcmp(argv[1], "latency") == 0) {
+            if (argc == 2 || strcmp(argv[2], "show") == 0) {
+                opts->cmd = CMD_PERF_SHOW;
+                if (argc > 3 && strcmp(argv[3], "--json") == 0) {
+                    opts->json_output = 1;
+                }
+                return 0;
+            } else if (strcmp(argv[2], "reset") == 0) {
+                opts->cmd = CMD_PERF_RESET;
+                return 0;
+            }
+        } else if (strcmp(argv[1], "telemetry") == 0) {
+            if (argc == 2 || strcmp(argv[2], "log") == 0) {
+                opts->cmd = CMD_TELEMETRY_LOG;
+                opts->telemetry_file = "benchmark_results/telemetry.log";
+                opts->telemetry_interval = 5;
+                for (int i = (argc > 2 && strcmp(argv[2], "log") == 0) ? 3 : 2; i < argc; i++) {
+                    if (strcmp(argv[i], "--interval") == 0 && i + 1 < argc) {
+                        opts->telemetry_interval = atoi(argv[++i]);
+                    } else if (strcmp(argv[i], "--json") == 0) {
+                        opts->json_output = 1;
+                    } else if (argv[i][0] != '-') {
+                        opts->telemetry_file = argv[i];
+                    }
+                }
+                return 0;
+            }
         }
     }
 
     /* Daemon / monitor mode arguments */
     static struct option long_options[] = {
-        {"interface",  required_argument, 0, 'i'},
-        {"direction",  required_argument, 0, 'd'},
-        {"mode",       required_argument, 0, 'm'},
-        {"config",     required_argument, 0, 'c'},
-        {"rules",      required_argument, 0, 'r'},
-        {"help",       no_argument,       0, 'h'},
+        {"interface",          required_argument, 0, 'i'},
+        {"direction",          required_argument, 0, 'd'},
+        {"mode",               required_argument, 0, 'm'},
+        {"config",             required_argument, 0, 'c'},
+        {"rules",              required_argument, 0, 'r'},
+        {"telemetry-file",     required_argument, 0, 't'},
+        {"telemetry-interval", required_argument, 0, 'T'},
+        {"telemetry-json",     no_argument,       0, 'J'},
+        {"help",               no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "i:d:m:c:r:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "i:d:m:c:r:t:T:Jh", long_options, NULL)) != -1) {
         switch (opt) {
         case 'i':
             opts->iface = optarg;
@@ -166,6 +202,15 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
             break;
         case 'r':
             opts->rules_path = optarg;
+            break;
+        case 't':
+            opts->telemetry_file = optarg;
+            break;
+        case 'T':
+            opts->telemetry_interval = atoi(optarg);
+            break;
+        case 'J':
+            opts->json_output = 1;
             break;
         case 'h':
             print_usage(argv[0]);

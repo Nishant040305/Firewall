@@ -4,6 +4,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/stat.h>
 #include "firewall_ctx.h"
 #include "rules_mgr.h"
 #include "conntrack_mgr.h"
@@ -63,9 +64,28 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
             return 0;
         }
         case CMD_STATS_SHOW:
-            return stats_mgr_show(ctx->loader.stats_map_fd, ctx->opts.json_output);
+            return stats_mgr_show(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd, ctx->opts.json_output);
         case CMD_STATS_RESET:
-            return stats_mgr_reset(ctx->loader.stats_map_fd);
+            return stats_mgr_reset(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd);
+        case CMD_PERF_SHOW:
+            return perf_mgr_show(ctx->loader.perf_map_fd, ctx->opts.json_output);
+        case CMD_PERF_RESET:
+            return perf_mgr_reset(ctx->loader.perf_map_fd);
+        case CMD_TELEMETRY_LOG: {
+            const char *tfile = ctx->opts.telemetry_file ? ctx->opts.telemetry_file : "benchmark_results/telemetry.log";
+            int interval = ctx->opts.telemetry_interval > 0 ? ctx->opts.telemetry_interval : 5;
+            if (strncmp(tfile, "benchmark_results", 17) == 0) {
+                mkdir("benchmark_results", 0755);
+            }
+            printf("[*] Starting telemetry logger -> '%s' (every %d seconds, %s format). Press Ctrl+C to stop.\n\n",
+                   tfile, interval, ctx->opts.json_output ? "JSON" : "text");
+            while (ctx->running) {
+                stats_mgr_log_to_file(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd,
+                                      tfile, ctx->opts.json_output);
+                sleep(interval);
+            }
+            return 0;
+        }
         default:
             return 0;
         }
@@ -102,6 +122,15 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
         } else if (strcasecmp(ctx->opts.mode, "tc") == 0) {
             ctx->config.mode = ATTACH_MODE_TC;
         }
+    }
+    if (ctx->opts.telemetry_file) {
+        snprintf(ctx->config.global.telemetry_file, sizeof(ctx->config.global.telemetry_file), "%s", ctx->opts.telemetry_file);
+    }
+    if (ctx->opts.telemetry_interval > 0) {
+        ctx->config.global.stats_interval_sec = ctx->opts.telemetry_interval;
+    }
+    if (ctx->opts.json_output) {
+        ctx->config.global.telemetry_json = 1;
     }
 
     if (config_validate(&ctx->config) < 0) {
@@ -149,16 +178,37 @@ int firewall_ctx_run(struct firewall_ctx *ctx)
     /* Start asynchronous userspace sweeper thread for dual maps */
     conntrack_mgr_start_gc(ctx->loader.conntrack_map_fd, ctx->loader.conntrack_syn_map_fd, 1);
 
+    const char *telem_file = ctx->config.global.telemetry_file[0] ?
+                             ctx->config.global.telemetry_file : "benchmark_results/telemetry.log";
+    while (*telem_file == '"' || *telem_file == '\'') telem_file++;
+    int telem_interval = ctx->config.global.stats_interval_sec > 0 ? ctx->config.global.stats_interval_sec : 5;
+    int telem_json = ctx->config.global.telemetry_json;
+
+    mkdir("benchmark_results", 0755);
+    printf("[*] Periodic telemetry logging active -> '%s' (every %d seconds, %s format)\n\n",
+           telem_file, telem_interval, telem_json ? "JSON" : "text");
+
+    /* Initial snapshot on startup */
+    stats_mgr_log_to_file(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd, telem_file, telem_json);
+
     time_t last_stats = time(NULL);
+    time_t last_telemetry = time(NULL);
+
     while (ctx->running) {
         /* Poll and print 5-tuple events from RingBuffer */
         event_bus_poll(&ctx->bus, ctx->config.global.ringbuf_poll_timeout_ms);
 
-        /* Periodic stats printing */
         time_t now = time(NULL);
+        /* Periodic console stats printing */
         if (now - last_stats >= ctx->config.global.stats_interval_sec) {
-            stats_mgr_show(ctx->loader.stats_map_fd, 0);
+            stats_mgr_show(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd, 0);
             last_stats = now;
+        }
+
+        /* Periodic telemetry file logging every interval */
+        if (now - last_telemetry >= telem_interval) {
+            stats_mgr_log_to_file(ctx->loader.stats_map_fd, ctx->loader.perf_map_fd, telem_file, telem_json);
+            last_telemetry = now;
         }
     }
 

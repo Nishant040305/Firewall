@@ -26,6 +26,8 @@ struct firewall_config {
         int stats_interval_sec;
         int ringbuf_poll_timeout_ms;
         int default_policy; /* 0 = DROP, 1 = PASS */
+        char telemetry_file[256];
+        int telemetry_json;
     } global;
 
 };

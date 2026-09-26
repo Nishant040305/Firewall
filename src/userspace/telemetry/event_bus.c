@@ -21,7 +21,10 @@ static int ringbuf_sample_handler(void *ctx, void *data, size_t data_sz)
         ip_to_str(evt->dst_ip, dst, sizeof(dst));
         const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                               (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
-        printf("[PACKET] %s | Proto %u | %s -> %s (%u bytes)\n", dir_str, evt->proto, src, dst, evt->pkt_len);
+        printf("[PACKET] %s | Proto %u | %s -> %s (%u bytes) | Time(ns): ext=%u hash=%u lkp=%u upd=%u tot=%u\n",
+               dir_str, evt->proto, src, dst, evt->pkt_len,
+               evt->time_extract_ns, evt->time_hash_ns,
+               evt->time_lookup_ns, evt->time_update_ns, evt->time_total_ns);
     }
     return 0;
 }

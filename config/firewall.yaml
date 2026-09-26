@@ -9,5 +9,7 @@ global:
   mode: hybrid             # hybrid (XDP for Ingress + TC for Egress), tc, or xdp
   log_level: info
   stats_interval_sec: 1
+  telemetry_file: telemetry/telemetry.log
+  telemetry_json: false
   ringbuf_poll_timeout_ms: 100
   default_policy: pass

@@ -48,4 +48,12 @@ struct {
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } ct_syn_map SEC(".maps");
 
+/* Per-CPU Performance & Latency Telemetry Map for Component-by-Component Timing */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, __u32);
+    __type(value, struct step_metric);
+    __uint(max_entries, STEP_MAX_OPS);
+} perf_map SEC(".maps");
+
 #endif /* __CORE_MAPS_BPF_H__ */

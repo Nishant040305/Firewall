@@ -43,5 +43,6 @@
 #define MAP_PIN_CONNTRACK_SYN      "/sys/fs/bpf/firewall/ct_syn_map"
 #define MAP_PIN_STATS              "/sys/fs/bpf/firewall/stats_map"
 #define MAP_PIN_EVENTS             "/sys/fs/bpf/firewall/events_ringbuf"
+#define MAP_PIN_PERF               "/sys/fs/bpf/firewall/perf_map"
 
 #endif /* __CORE_CONSTANTS_H__ */

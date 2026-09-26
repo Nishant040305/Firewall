@@ -15,6 +15,9 @@ enum cli_cmd {
     CMD_CONNTRACK_GC,
     CMD_STATS_SHOW,
     CMD_STATS_RESET,
+    CMD_PERF_SHOW,
+    CMD_PERF_RESET,
+    CMD_TELEMETRY_LOG,
     CMD_STATUS,
 };
 
@@ -26,6 +29,10 @@ struct firewall_options {
     const char *direction;  /* "in", "out", "both" */
     const char *mode;       /* "tc", "xdp", "hybrid" */
     
+    /* Telemetry periodic logging */
+    const char *telemetry_file;
+    int telemetry_interval;
+
     /* Subcommand parameters */
     struct fw_rule new_rule;
     __u32 del_rule_id;
