@@ -33,7 +33,7 @@
 #define TCP_SYN_TIMEOUT_NS         (30ULL * 1000000000ULL)  /* 30 seconds */
 #define TCP_ESTABLISHED_TIMEOUT_NS (300ULL * 1000000000ULL) /* 5 minutes */
 #define TCP_CLOSE_TIMEOUT_NS       (10ULL * 1000000000ULL)  /* 10 seconds */
-#define CONNTRACK_REFRESH_INTERVAL_NS (1ULL * 1000000000ULL)  /* 1 second: lazy refresh window */
+#define CONNTRACK_REFRESH_INTERVAL_NS (5ULL * 1000000000ULL)  /* 1 second: lazy refresh window */
 
 /* Default BPF Map Pin Paths */
 #define BPF_FS_PATH                "/sys/fs/bpf/firewall"

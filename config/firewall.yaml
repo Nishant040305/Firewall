@@ -8,6 +8,6 @@ global:
   direction: both          # in (ingress), out (egress), or both (bidirectional)
   mode: hybrid             # hybrid (XDP for Ingress + TC for Egress), tc, or xdp
   log_level: info
-  stats_interval_sec: 1
+  stats_interval_sec: 5
   ringbuf_poll_timeout_ms: 100
   default_policy: pass
