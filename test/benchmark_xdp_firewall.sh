@@ -113,23 +113,28 @@ disable_offloads() {
     #     $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
     # done
 
-    # # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
-    # local num_cpus
-    # num_cpus=$(nproc 2>/dev/null || echo "20")
-    # local rps_mask
-    # rps_mask=$(printf "%x" $(( (1 << num_cpus) - 1 )) 2>/dev/null || echo "fffff")
-    # sysctl -w net.core.rps_sock_flow_entries=32768 >/dev/null 2>&1 || true
+    # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
+    local num_cpus
+    num_cpus=$(nproc 2>/dev/null || echo "20")
+    local rps_mask
+    rps_mask=$(printf "%x" $(( (1 << num_cpus) - 1 )) 2>/dev/null || echo "fffff")
+    sysctl -w net.core.rps_sock_flow_entries=32768 >/dev/null 2>&1 || true
 
-    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}"; do
-    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-    #         ip link set "$dev" txqueuelen 3000 2>/dev/null || true
-    #         if [ -d "/sys/class/net/$dev/queues/rx-0" ]; then
-    #             echo "$rps_mask" > "/sys/class/net/$dev/queues/rx-0/rps_cpus" 2>/dev/null || true
-    #             echo 4096 > "/sys/class/net/$dev/queues/rx-0/rps_flow_cnt" 2>/dev/null || true
-    #         fi
-    #     fi
-    # done
-    echo "[+] Offload and RPS settings applied (if supported)."
+    for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}"; do
+        if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+            ip link set "$dev" txqueuelen 3000 2>/dev/null || true
+            if [ -d "/sys/class/net/$dev/queues/rx-0" ]; then
+                echo "$rps_mask" > "/sys/class/net/$dev/queues/rx-0/rps_cpus" 2>/dev/null || true
+                echo 4096 > "/sys/class/net/$dev/queues/rx-0/rps_flow_cnt" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    for c in client attacker webserver; do
+        $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
+    done
+
+    echo "[+] Queue lengths and RPS multi-core steering applied."
 }
 
 # Terminal colors
@@ -207,19 +212,63 @@ count_conntrack_entries() {
     echo "${val:-0}"
 }
 
+get_active_xdp_prog_id() {
+    local pid=""
+    if [ -n "${CLIENT_VETH:-}" ]; then
+        pid=$(bpftool net show dev "$CLIENT_VETH" 2>/dev/null | awk '/id/ {for(i=1;i<=NF;i++) if($i=="id") {print $(i+1); exit}}')
+    fi
+    if [ -z "$pid" ] && [ -n "${ATTACKER_VETH:-}" ]; then
+        pid=$(bpftool net show dev "$ATTACKER_VETH" 2>/dev/null | awk '/id/ {for(i=1;i<=NF;i++) if($i=="id") {print $(i+1); exit}}')
+    fi
+    if [ -z "$pid" ]; then
+        pid=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | grep -E '^[0-9]+:' | awk -F: '{print $1}' | tail -1)
+    fi
+    echo "$pid"
+}
+
 get_bpf_memory() {
-    # Sum memlock of all firewall BPF maps
+    local pid
+    pid=$(get_active_xdp_prog_id)
     local total=0
-    for map_name in stats_map events_ringbuf rules_map conntrack_map; do
-        local mem
-        mem=$(bpftool map show name "$map_name" 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0")
-        total=$((total + mem))
+
+    if [ -n "$pid" ]; then
+        local map_ids
+        map_ids=$(bpftool prog show id "$pid" 2>/dev/null | grep -oP 'map_ids \K[0-9,]+' | tr ',' ' ' || true)
+        if [ -n "$map_ids" ]; then
+            for mid in $map_ids; do
+                local mem
+                mem=$(bpftool map show id "$mid" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
+                total=$((total + ${mem:-0}))
+            done
+            echo "$total"
+            return
+        fi
+    fi
+
+    for map_name in stats_map events_ringbuf rules_map conntrack_map flow_cache_map; do
+        local mem=""
+        if [ -f "/sys/fs/bpf/firewall/$map_name" ]; then
+            mem=$(bpftool map show pinned "/sys/fs/bpf/firewall/$map_name" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
+        else
+            mem=$(bpftool map show name "$map_name" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | tail -1 || echo "0")
+        fi
+        total=$((total + ${mem:-0}))
     done
     echo "$total"
 }
 
 get_bpf_prog_memory() {
-    bpftool prog show name xdp_firewall_prog 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0"
+    local pid
+    pid=$(get_active_xdp_prog_id)
+    if [ -n "$pid" ]; then
+        local mem
+        mem=$(bpftool prog show id "$pid" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
+        echo "${mem:-0}"
+        return
+    fi
+    local mem
+    mem=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | grep -oP 'memlock \K[0-9]+' | tail -1 || echo "0")
+    echo "${mem:-0}"
 }
 
 measure_cpu_during() {
@@ -909,16 +958,39 @@ echo -e "${BOLD}================================================================
 echo -e "${BOLD}  XDP/eBPF STATEFUL FIREWALL PERFORMANCE BENCHMARK SUITE${RESET}"
 echo -e "${BOLD}=================================================================${RESET}"
 echo ""
-echo "  Environment:"
-echo "    Kernel:         $(uname -r)"
-echo "    CPUs:           $(nproc)"
+print_environment() {
+    echo "  Environment:"
+    echo "    Kernel:         $(uname -r)"
+    echo "    CPUs:           $(nproc)"
     echo "    Client veth:    $CLIENT_VETH"
     echo "    Attacker veth:  ${ATTACKER_VETH:-unknown}"
-    XDP_INFO=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | sed -n '1p' | sed 's/^[[:space:]]*//' || true)
-    MAP_INFO=$(bpftool map show name conntrack_map 2>/dev/null | sed -n '1p' | sed 's/^[[:space:]]*//' || true)
-    echo "    XDP Program:    ${XDP_INFO:-Not loaded}"
-    echo "    Conntrack Map:  ${MAP_INFO:-Not loaded}"
+    local active_pid
+    active_pid=$(get_active_xdp_prog_id)
+    local xdp_info=""
+    local map_info=""
+    if [ -n "$active_pid" ]; then
+        xdp_info=$(bpftool prog show id "$active_pid" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' || true)
+        local map_ids
+        map_ids=$(bpftool prog show id "$active_pid" 2>/dev/null | grep -oP 'map_ids \K[0-9,]+' | tr ',' ' ' || true)
+        for mid in $map_ids; do
+            if bpftool map show id "$mid" 2>/dev/null | grep -q "conntrack_map"; then
+                map_info=$(bpftool map show id "$mid" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' || true)
+                break
+            fi
+        done
+    fi
+    if [ -z "$xdp_info" ]; then
+        xdp_info=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || true)
+    fi
+    if [ -z "$map_info" ]; then
+        map_info=$(bpftool map show name conntrack_map 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || true)
+    fi
+    echo "    XDP Program:    ${xdp_info:-Not loaded}"
+    echo "    Conntrack Map:  ${map_info:-Not loaded}"
     echo ""
+}
+
+print_environment
 
 if [ "$QUICK_MODE" -eq 1 ]; then
     echo -e "  ${YELLOW}Mode: QUICK (reduced sample counts)${RESET}"

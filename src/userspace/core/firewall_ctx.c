@@ -56,7 +56,7 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
         case CMD_CONNTRACK_LIST:
             return conntrack_mgr_list(ctx->loader.conntrack_map_fd);
         case CMD_CONNTRACK_FLUSH:
-            return conntrack_mgr_flush(ctx->loader.conntrack_map_fd);
+            return conntrack_mgr_flush(ctx->loader.conntrack_map_fd, ctx->loader.flow_cache_map_fd);
         case CMD_STATS_SHOW:
             return stats_mgr_show(ctx->loader.stats_map_fd, ctx->opts.json_output);
         case CMD_STATS_RESET:

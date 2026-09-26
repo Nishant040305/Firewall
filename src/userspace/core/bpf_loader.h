@@ -53,6 +53,7 @@ struct bpf_loader_ctx {
     int events_ringbuf_fd;
     int rules_map_fd;
     int conntrack_map_fd;
+    int flow_cache_map_fd;
 };
 
 /* Load BPF object, attach programs (TC or XDP, Ingress / Egress / Both), and fetch map FDs */

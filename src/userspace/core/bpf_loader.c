@@ -236,6 +236,7 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
     ctx->events_ringbuf_fd = bpf_object__find_map_fd_by_name(ctx->obj, "events_ringbuf");
     ctx->rules_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "rules_map");
     ctx->conntrack_map_fd  = bpf_object__find_map_fd_by_name(ctx->obj, "conntrack_map");
+    ctx->flow_cache_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "flow_cache_map");
 
     /* Pin maps to bpffs if directory exists or can be created */
     bpf_loader_pin_maps(ctx);
@@ -250,6 +251,7 @@ int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx)
     /* Unlink stale pinned maps from previous runs so new maps pin cleanly */
     unlink(MAP_PIN_RULES);
     unlink(MAP_PIN_CONNTRACK);
+    unlink(MAP_PIN_CACHE);
     unlink(MAP_PIN_STATS);
     unlink(MAP_PIN_EVENTS);
 
@@ -263,6 +265,7 @@ int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx)
     memset(ctx, 0, sizeof(*ctx));
     ctx->rules_map_fd = bpf_obj_get(MAP_PIN_RULES);
     ctx->conntrack_map_fd = bpf_obj_get(MAP_PIN_CONNTRACK);
+    ctx->flow_cache_map_fd = bpf_obj_get(MAP_PIN_CACHE);
     ctx->stats_map_fd = bpf_obj_get(MAP_PIN_STATS);
     ctx->events_ringbuf_fd = bpf_obj_get(MAP_PIN_EVENTS);
 
@@ -312,6 +315,7 @@ void bpf_loader_cleanup(struct bpf_loader_ctx *ctx)
 
     unlink(MAP_PIN_RULES);
     unlink(MAP_PIN_CONNTRACK);
+    unlink(MAP_PIN_CACHE);
     unlink(MAP_PIN_STATS);
     unlink(MAP_PIN_EVENTS);
 

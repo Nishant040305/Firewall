@@ -41,4 +41,13 @@ struct flow_entry {
     __u64 timeout_ns;       /* Timeout duration */
 };
 
+/* L1 Per-CPU Direct-Indexed Flow Cache Entry */
+struct flow_cache_entry {
+    struct flow_key key;     /* 16 bytes: 5-tuple flow key */
+    __u32 state;             /* enum conn_state */
+    __u32 gen_id;            /* Generation / epoch ID */
+    __u64 last_seen_ns;      /* Most recent packet timestamp */
+    __u64 timeout_ns;        /* Flow timeout duration */
+};
+
 #endif /* __CORE_CONNTRACK_H__ */

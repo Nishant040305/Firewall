@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <time.h>
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <core/constants.h>
 #include "conntrack_mgr.h"
 #include "../utils/ip_utils.h"
 
@@ -79,7 +81,7 @@ int conntrack_mgr_list(int map_fd)
     return 0;
 }
 
-int conntrack_mgr_flush(int map_fd)
+int conntrack_mgr_flush(int map_fd, int cache_map_fd)
 {
     if (map_fd < 0) return -1;
 
@@ -91,6 +93,18 @@ int conntrack_mgr_flush(int map_fd)
         bpf_map_delete_elem(map_fd, &next_key);
         count++;
         key = next_key;
+    }
+
+    if (cache_map_fd >= 0) {
+        int ncpus = libbpf_num_possible_cpus();
+        if (ncpus <= 0) ncpus = 1;
+        struct flow_cache_entry *zero_entries = calloc(ncpus, sizeof(struct flow_cache_entry));
+        if (zero_entries) {
+            for (__u32 i = 0; i < FLOW_CACHE_ENTRIES; i++) {
+                bpf_map_update_elem(cache_map_fd, &i, zero_entries, BPF_ANY);
+            }
+            free(zero_entries);
+        }
     }
 
     printf("[+] Flushed %d connection tracking entries.\n", count);

@@ -39,7 +39,12 @@
 #define BPF_FS_PATH                "/sys/fs/bpf/firewall"
 #define MAP_PIN_RULES              "/sys/fs/bpf/firewall/rules_map"
 #define MAP_PIN_CONNTRACK          "/sys/fs/bpf/firewall/conntrack_map"
+#define MAP_PIN_CACHE              "/sys/fs/bpf/firewall/flow_cache_map"
 #define MAP_PIN_STATS              "/sys/fs/bpf/firewall/stats_map"
 #define MAP_PIN_EVENTS             "/sys/fs/bpf/firewall/events_ringbuf"
+
+/* L1 Per-CPU Fast Flow Cache Limits */
+#define FLOW_CACHE_ENTRIES         4096
+#define FLOW_CACHE_MASK            (FLOW_CACHE_ENTRIES - 1)
 
 #endif /* __CORE_CONSTANTS_H__ */

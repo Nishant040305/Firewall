@@ -21,6 +21,26 @@ static __always_inline void inc_stat(__u32 counter_key)
 }
 #endif
 
+/* Fast 16-byte flow key equality comparison */
+static __always_inline int flow_keys_equal(const struct flow_key *a, const struct flow_key *b)
+{
+    const __u32 *w1 = (const __u32 *)a;
+    const __u32 *w2 = (const __u32 *)b;
+    return (w1[0] == w2[0]) && (w1[1] == w2[1]) && (w1[2] == w2[2]) && (w1[3] == w2[3]);
+}
+
+/* Fast 5-Tuple hash calculation */
+static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
+{
+    __u32 h = key->src_ip ^ key->dst_ip;
+    h ^= ((__u32)key->src_port << 16) | key->dst_port;
+    h ^= key->proto;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = h ^ (h >> 16);
+    return h;
+}
+
 /* Construct forward 5-tuple flow key */
 static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow_key *key)
 {

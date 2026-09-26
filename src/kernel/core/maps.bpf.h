@@ -40,4 +40,12 @@ struct {
     __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } conntrack_map SEC(".maps");
 
+/* L1 Per-CPU Direct-Indexed Flow Cache for O(1) Fast-Path Conntrack Bypass */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, __u32);
+    __type(value, struct flow_cache_entry);
+    __uint(max_entries, FLOW_CACHE_ENTRIES);
+} flow_cache_map SEC(".maps");
+
 #endif /* __CORE_MAPS_BPF_H__ */

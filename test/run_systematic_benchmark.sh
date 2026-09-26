@@ -483,7 +483,7 @@ benchmark_statetable_scalability() {
         local http_ms=$(awk "BEGIN {printf \"%.2f\", ${http_t:-0} * 1000}")
 
         local mem_bytes
-        mem_bytes=$(bpftool map show name conntrack_map 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0")
+        mem_bytes=$(bpftool map show name conntrack_map 2>/dev/null | grep -oP 'memlock \K[0-9]+' | tail -1 || echo "0")
         local mem_mb=$(awk "BEGIN {printf \"%.2f\", ${mem_bytes:-0} / 1048576}")
 
         echo "     Result: Occupancy=${tier} (${pct}%) | Syscall Lookup Mean=${mean_ns} ns (±${stddev_ns} ns, range ${min_ns}-${max_ns}) | HTTP=${http_ms} ms"
@@ -530,8 +530,8 @@ benchmark_observability_overhead() {
         local prog_stat
         prog_stat=$(bpftool prog show name xdp_firewall_prog 2>/dev/null || echo "")
         local run_time_ns run_cnt avg_ns_per_pkt=0
-        run_time_ns=$(echo "$prog_stat" | grep -oP 'run_time_ns \K[0-9]+' || echo "0")
-        run_cnt=$(echo "$prog_stat" | grep -oP 'run_cnt \K[0-9]+' || echo "0")
+        run_time_ns=$(echo "$prog_stat" | grep -oP 'run_time_ns \K[0-9]+' | tail -1 || echo "0")
+        run_cnt=$(echo "$prog_stat" | grep -oP 'run_cnt \K[0-9]+' | tail -1 || echo "0")
         if [ "$run_cnt" -gt 0 ]; then
             avg_ns_per_pkt=$(awk "BEGIN {printf \"%.1f\", $run_time_ns / $run_cnt}")
         fi
