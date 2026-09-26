@@ -22,7 +22,7 @@
 #define TCP_FLAG_ACK 0x10
 #define TCP_FLAG_URG 0x20
 
-/* Process TCP state machine (Step 9) */
+/* Process TCP state machine (Step 9) - Dual-Map Architecture (Cilium-Style Split Table) */
 static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 {
     struct flow_key fwd_key, rev_key;
@@ -30,9 +30,8 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
     make_reverse_flow_key(pkt, &rev_key);
 
     __u8 flags = pkt->tcp_flags;
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
 
-    /* 1. TCP SYN (Initial connection request) */
+    /* 1. TCP SYN (Initial connection request from client or SYN flood) */
     if ((flags & TCP_FLAG_SYN) && !(flags & TCP_FLAG_ACK)) {
         /* Evaluate policy rules */
         int rule_action = evaluate_rules(pkt);
@@ -43,8 +42,17 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             return ACTION_DROP;
         }
 
-        /* Create forward flow entry */
-        struct flow_entry new_entry = {
+        /* Check if connection is already established (e.g. retransmitted SYN) */
+        struct flow_entry *estab_existing = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+        if (estab_existing) {
+            estab_existing->last_seen_ns = now;
+            pkt->action = ACTION_PASS;
+            pkt->conn_state = estab_existing->state;
+            return ACTION_PASS;
+        }
+
+        /* Store half-open state in ct_syn_map (LRU Hash Map: absorbs SYN floods) */
+        struct flow_entry new_syn = {
             .state = CONN_STATE_SYN_SENT,
             .flags_seen = flags,
             .created_ns = now,
@@ -55,10 +63,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, &fwd_key, &new_entry, BPF_ANY);
+        bpf_map_update_elem(&ct_syn_map, &fwd_key, &new_syn, BPF_ANY);
 
-        /* Create reverse flow entry awaiting SYN-ACK */
-        struct flow_entry rev_entry = {
+        /* Create reverse half-open entry awaiting SYN-ACK */
+        struct flow_entry rev_syn = {
             .state = CONN_STATE_SYN_SENT,
             .flags_seen = 0,
             .created_ns = now,
@@ -69,7 +77,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, &rev_key, &rev_entry, BPF_ANY);
+        bpf_map_update_elem(&ct_syn_map, &rev_key, &rev_syn, BPF_ANY);
 
         inc_stat(STAT_CONN_NEW);
         pkt->action = ACTION_PASS;
@@ -77,9 +85,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         return ACTION_PASS;
     }
 
-    /* 2. Check for existing connection */
+    /* 2. Fast Path: Lookup in Established Table (conntrack_map) */
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
     if (entry) {
-        /* Check timeout (guard against multi-core clock skew underflow: now > entry->last_seen_ns) */
+        /* Check timeout */
         if (now > entry->last_seen_ns && (now - entry->last_seen_ns > entry->timeout_ns)) {
             inc_stat(STAT_CONN_TIMEOUT);
             bpf_map_delete_elem(&conntrack_map, &fwd_key);
@@ -90,36 +99,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             return ACTION_DROP;
         }
 
-        /* TCP SYN-ACK Response from Server */
-        if ((flags & TCP_FLAG_SYN) && (flags & TCP_FLAG_ACK)) {
-            entry->state = CONN_STATE_SYN_RECV;
-            if (now > entry->last_seen_ns) {
-                entry->last_seen_ns = now;
-            }
-            entry->packets_reverse += 1;
-            entry->bytes_reverse += pkt->pkt_len;
-            entry->flags_seen |= flags;
-            entry->timeout_ns = TCP_SYN_TIMEOUT_NS;
-
-            pkt->action = ACTION_PASS;
-            pkt->conn_state = CONN_STATE_SYN_RECV;
-            return ACTION_PASS;
-        }
-
         /* TCP ACK or Data packet */
         if (flags & TCP_FLAG_ACK) {
-            if (entry->state == CONN_STATE_SYN_RECV || entry->state == CONN_STATE_SYN_SENT) {
-                /* State transition: write is mandatory */
-                entry->state = CONN_STATE_ESTABLISHED;
-                entry->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
-                entry->last_seen_ns = now;
-                entry->packets_forward += 1;
-                entry->bytes_forward += pkt->pkt_len;
-                entry->flags_seen |= flags;
-                inc_stat(STAT_CONN_ESTABLISHED);
-            } else if (entry->state == CONN_STATE_ESTABLISHED) {
-                /* Hot data path: only write if refresh interval elapsed (lazy refresh)
-                 * This converts ~99% of data packets from locked read+write to lock-free read-only */
+            if (entry->state == CONN_STATE_ESTABLISHED) {
+                /* Hot data path: only write if refresh interval elapsed (lazy refresh) */
                 if (now > entry->last_seen_ns &&
                     (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                     entry->last_seen_ns = now;
@@ -129,7 +112,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                 }
             }
 
-            /* Handle connection termination (FIN / RST) — always write */
+            /* Handle connection termination (FIN / RST) */
             if (flags & TCP_FLAG_RST) {
                 entry->state = CONN_STATE_CLOSED;
                 entry->timeout_ns = TCP_CLOSE_TIMEOUT_NS;
@@ -160,7 +143,6 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Other valid packets on established flow */
         if (entry->state == CONN_STATE_ESTABLISHED) {
-            /* Lazy refresh: only write if interval elapsed */
             if (now > entry->last_seen_ns &&
                 (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
@@ -174,7 +156,86 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         }
     }
 
-    /* 3. Unsolicited non-SYN packet with no state in conntrack -> DROP (Step 14 Test Case 4) */
+    /* 3. Slow Path: Check Half-Open SYN Table (ct_syn_map) */
+    struct flow_entry *syn_entry = bpf_map_lookup_elem(&ct_syn_map, &fwd_key);
+    if (syn_entry) {
+        /* Check timeout */
+        if (now > syn_entry->last_seen_ns && (now - syn_entry->last_seen_ns > syn_entry->timeout_ns)) {
+            inc_stat(STAT_CONN_TIMEOUT);
+            bpf_map_delete_elem(&ct_syn_map, &fwd_key);
+            bpf_map_delete_elem(&ct_syn_map, &rev_key);
+            inc_stat(STAT_DROPPED_UNSOLICITED);
+            pkt->action = ACTION_DROP;
+            pkt->conn_state = CONN_STATE_INVALID;
+            return ACTION_DROP;
+        }
+
+        /* TCP SYN-ACK Response from Server */
+        if ((flags & TCP_FLAG_SYN) && (flags & TCP_FLAG_ACK)) {
+            syn_entry->state = CONN_STATE_SYN_RECV;
+            if (now > syn_entry->last_seen_ns) {
+                syn_entry->last_seen_ns = now;
+            }
+            syn_entry->packets_reverse += 1;
+            syn_entry->bytes_reverse += pkt->pkt_len;
+            syn_entry->flags_seen |= flags;
+            syn_entry->timeout_ns = TCP_SYN_TIMEOUT_NS;
+
+            pkt->action = ACTION_PASS;
+            pkt->conn_state = CONN_STATE_SYN_RECV;
+            return ACTION_PASS;
+        }
+
+        /* TCP ACK: Handshake complete -> Promote connection into established table */
+        if (flags & TCP_FLAG_ACK) {
+            struct flow_entry estab_fwd = {
+                .state = CONN_STATE_ESTABLISHED,
+                .flags_seen = syn_entry->flags_seen | flags,
+                .created_ns = syn_entry->created_ns,
+                .last_seen_ns = now,
+                .packets_forward = syn_entry->packets_forward + 1,
+                .packets_reverse = syn_entry->packets_reverse,
+                .bytes_forward = syn_entry->bytes_forward + pkt->pkt_len,
+                .bytes_reverse = syn_entry->bytes_reverse,
+                .timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS,
+            };
+            bpf_map_update_elem(&conntrack_map, &fwd_key, &estab_fwd, BPF_ANY);
+
+            struct flow_entry estab_rev = {
+                .state = CONN_STATE_ESTABLISHED,
+                .flags_seen = 0,
+                .created_ns = syn_entry->created_ns,
+                .last_seen_ns = now,
+                .packets_forward = syn_entry->packets_reverse,
+                .packets_reverse = syn_entry->packets_forward + 1,
+                .bytes_forward = syn_entry->bytes_reverse,
+                .bytes_reverse = syn_entry->bytes_forward + pkt->pkt_len,
+                .timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS,
+            };
+            bpf_map_update_elem(&conntrack_map, &rev_key, &estab_rev, BPF_ANY);
+
+            /* Evict from half-open table */
+            bpf_map_delete_elem(&ct_syn_map, &fwd_key);
+            bpf_map_delete_elem(&ct_syn_map, &rev_key);
+
+            inc_stat(STAT_CONN_ESTABLISHED);
+            pkt->action = ACTION_PASS;
+            pkt->conn_state = CONN_STATE_ESTABLISHED;
+            return ACTION_PASS;
+        }
+
+        /* RST on half-open flow */
+        if (flags & TCP_FLAG_RST) {
+            bpf_map_delete_elem(&ct_syn_map, &fwd_key);
+            bpf_map_delete_elem(&ct_syn_map, &rev_key);
+            inc_stat(STAT_CONN_CLOSED);
+            pkt->action = ACTION_PASS;
+            pkt->conn_state = CONN_STATE_CLOSED;
+            return ACTION_PASS;
+        }
+    }
+
+    /* 4. Unsolicited non-SYN packet with no state in either table -> DROP */
     inc_stat(STAT_DROPPED_UNSOLICITED);
     pkt->action = ACTION_DROP;
     pkt->conn_state = CONN_STATE_INVALID;

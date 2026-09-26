@@ -5,6 +5,7 @@
 
 /* Capacity Limits */
 #define MAX_FLOW_ENTRIES       65536
+#define MAX_SYN_FLOW_ENTRIES   32768
 #define MAX_RULE_ENTRIES       128
 #define RINGBUF_EVENT_SIZE     (1 << 16) /* 64KB RingBuffer */
 
@@ -30,7 +31,7 @@
 /* Timeouts (Nanoseconds) */
 #define UDP_TIMEOUT_NS             (30ULL * 1000000000ULL)  /* 30 seconds */
 #define ICMP_TIMEOUT_NS            (10ULL * 1000000000ULL)  /* 10 seconds */
-#define TCP_SYN_TIMEOUT_NS         (30ULL * 1000000000ULL)  /* 30 seconds */
+#define TCP_SYN_TIMEOUT_NS         (5ULL * 1000000000ULL)   /* 5 seconds: half-open handshake window */
 #define TCP_ESTABLISHED_TIMEOUT_NS (300ULL * 1000000000ULL) /* 5 minutes */
 #define TCP_CLOSE_TIMEOUT_NS       (10ULL * 1000000000ULL)  /* 10 seconds */
 #define CONNTRACK_REFRESH_INTERVAL_NS (1ULL * 1000000000ULL)  /* 1 second: lazy refresh window */
@@ -39,6 +40,7 @@
 #define BPF_FS_PATH                "/sys/fs/bpf/firewall"
 #define MAP_PIN_RULES              "/sys/fs/bpf/firewall/rules_map"
 #define MAP_PIN_CONNTRACK          "/sys/fs/bpf/firewall/conntrack_map"
+#define MAP_PIN_CONNTRACK_SYN      "/sys/fs/bpf/firewall/ct_syn_map"
 #define MAP_PIN_STATS              "/sys/fs/bpf/firewall/stats_map"
 #define MAP_PIN_EVENTS             "/sys/fs/bpf/firewall/events_ringbuf"
 

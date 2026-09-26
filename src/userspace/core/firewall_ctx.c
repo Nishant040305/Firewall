@@ -54,9 +54,14 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
         case CMD_RULE_LOAD:
             return rules_mgr_load_file(ctx->loader.rules_map_fd, ctx->opts.rules_path);
         case CMD_CONNTRACK_LIST:
-            return conntrack_mgr_list(ctx->loader.conntrack_map_fd);
+            return conntrack_mgr_list_dual(ctx->loader.conntrack_map_fd, ctx->loader.conntrack_syn_map_fd);
         case CMD_CONNTRACK_FLUSH:
-            return conntrack_mgr_flush(ctx->loader.conntrack_map_fd);
+            return conntrack_mgr_flush_dual(ctx->loader.conntrack_map_fd, ctx->loader.conntrack_syn_map_fd);
+        case CMD_CONNTRACK_GC: {
+            int evicted = conntrack_mgr_gc_sweep_dual(ctx->loader.conntrack_map_fd, ctx->loader.conntrack_syn_map_fd);
+            printf("[+] Swept conntrack tables: evicted %d expired/closed connection(s).\n", evicted);
+            return 0;
+        }
         case CMD_STATS_SHOW:
             return stats_mgr_show(ctx->loader.stats_map_fd, ctx->opts.json_output);
         case CMD_STATS_RESET:
@@ -138,7 +143,11 @@ int firewall_ctx_run(struct firewall_ctx *ctx)
            ctx->config.interface,
            direction_to_str(ctx->config.direction),
            mode_to_str(ctx->loader.mode));
-    printf("[*] Real-time 5-tuple telemetry streaming active. Press Ctrl+C to stop.\n\n");
+    printf("[*] Real-time 5-tuple telemetry streaming active. Press Ctrl+C to stop.\n");
+    printf("[+] Started Userspace Conntrack GC Sweeper (interval: 1s)\n\n");
+
+    /* Start asynchronous userspace sweeper thread for dual maps */
+    conntrack_mgr_start_gc(ctx->loader.conntrack_map_fd, ctx->loader.conntrack_syn_map_fd, 1);
 
     time_t last_stats = time(NULL);
     while (ctx->running) {
@@ -153,6 +162,7 @@ int firewall_ctx_run(struct firewall_ctx *ctx)
         }
     }
 
+    conntrack_mgr_stop_gc();
     return 0;
 }
 
@@ -176,6 +186,7 @@ void firewall_ctx_stop(struct firewall_ctx *ctx)
     if (ctx->opts.cmd != CMD_RUN) return;
 
     printf("\n\n[*] Shutting down firewall...\n");
+    conntrack_mgr_stop_gc();
     event_bus_cleanup(&ctx->bus);
     bpf_loader_cleanup(&ctx->loader);
     printf("[+] Detached and unloaded successfully.\n");

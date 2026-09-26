@@ -201,7 +201,7 @@ count_conntrack_entries() {
         return
     fi
     local raw
-    raw=$("$FW_CTL" conntrack list 2>/dev/null | grep -E -c "^(TCP|UDP|ICMP)" 2>/dev/null || true)
+    raw=$("$FW_CTL" conntrack list 2>/dev/null | grep -E -c "^[[:space:]]*(TCP|UDP|ICMP)" 2>/dev/null || true)
     local val
     val=$(echo "$raw" | head -1 | tr -dc '0-9')
     echo "${val:-0}"
@@ -210,7 +210,7 @@ count_conntrack_entries() {
 get_bpf_memory() {
     # Sum memlock of all firewall BPF maps
     local total=0
-    for map_name in stats_map events_ringbuf rules_map conntrack_map; do
+    for map_name in stats_map events_ringbuf rules_map conntrack_map ct_syn_map; do
         local mem
         mem=$(bpftool map show name "$map_name" 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0")
         total=$((total + mem))
@@ -581,7 +581,7 @@ run_phase4() {
     local flood_http_time=0
     for i in $(seq 1 $flood_http_total); do
         local res
-        res=$($INCUS_CMD exec client -- curl -s -o /dev/null -w '%{http_code} %{time_total}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "000 0")
+        res=$($INCUS_CMD exec client -- curl -s -m 2 -o /dev/null -w '%{http_code} %{time_total}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "000 0")
         local code t
         code=$(echo "$res" | awk '{print $1}')
         t=$(echo "$res" | awk '{print $2}')
@@ -673,7 +673,7 @@ run_phase5() {
     local udpflood_http_total=15
     for i in $(seq 1 $udpflood_http_total); do
         local code
-        code=$($INCUS_CMD exec client -- curl -s -o /dev/null -w '%{http_code}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "000")
+        code=$($INCUS_CMD exec client -- curl -s -m 2 -o /dev/null -w '%{http_code}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "000")
         if [ "$code" = "200" ]; then
             udpflood_http_success=$((udpflood_http_success + 1))
         fi
@@ -746,7 +746,7 @@ run_phase6() {
     for delay in 0 1 2 3 5; do
         if [ "$delay" -gt 0 ]; then sleep 1; fi
         local t
-        t=$($INCUS_CMD exec client -- curl -s -o /dev/null -w '%{time_total}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "999")
+        t=$($INCUS_CMD exec client -- curl -s -m 2 -o /dev/null -w '%{time_total}' "http://${WEBSERVER_IP}/" --connect-timeout 2 2>/dev/null || echo "999")
         local t_ms
         t_ms=$(awk "BEGIN {printf \"%.2f\", $t * 1000}")
         store_result "recovery_latency_${delay}s_after_flood_ms" "$t_ms"

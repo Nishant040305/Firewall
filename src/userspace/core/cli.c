@@ -120,6 +120,9 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
             } else if (strcmp(argv[2], "flush") == 0) {
                 opts->cmd = CMD_CONNTRACK_FLUSH;
                 return 0;
+            } else if (strcmp(argv[2], "gc") == 0 || strcmp(argv[2], "sweep") == 0) {
+                opts->cmd = CMD_CONNTRACK_GC;
+                return 0;
             }
         } else if (strcmp(argv[1], "stats") == 0) {
             if (argc == 2 || strcmp(argv[2], "show") == 0) {

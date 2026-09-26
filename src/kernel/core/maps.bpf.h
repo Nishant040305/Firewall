@@ -31,12 +31,21 @@ struct {
     __uint(max_entries, MAX_RULE_ENTRIES);
 } rules_map SEC(".maps");
 
-/* Stateful Connection Tracking Table (Step 9) - LRU Hash prevents exhaustion */
+/* Stateful Connection Tracking Table (Step 9) - Established Connections (Fast Path Hash Map) */
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, struct flow_key);
     __type(value, struct flow_entry);
     __uint(max_entries, MAX_FLOW_ENTRIES);
 } conntrack_map SEC(".maps");
+
+/* Half-Open SYN Table (Step 9) - Dual-Map Architecture: Absorbs SYN Floods */
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, struct flow_key);
+    __type(value, struct flow_entry);
+    __uint(max_entries, MAX_SYN_FLOW_ENTRIES);
+    __uint(map_flags, BPF_F_NO_COMMON_LRU);
+} ct_syn_map SEC(".maps");
 
 #endif /* __CORE_MAPS_BPF_H__ */
