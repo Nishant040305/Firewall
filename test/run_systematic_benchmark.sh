@@ -139,11 +139,11 @@ except Exception as e:
 configure_and_verify_offloads() {
     for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
         if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-            ethtool -K "$dev" tso off gso off gro off rx off tx off 2>/dev/null || true
+            ethtool -K "$dev" tso off gso off gro off rx off tx off sg off 2>/dev/null || true
         fi
     done
     for c in client attacker webserver; do
-        $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off 2>/dev/null || true
+        $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off sg off 2>/dev/null || true
     done
 }
 
