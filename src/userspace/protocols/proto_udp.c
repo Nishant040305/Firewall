@@ -15,12 +15,14 @@ static void udp_format_event(const struct packet_event *evt, char *buf, size_t l
                           (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
     const char *act_str = (evt->action == ACTION_PASS) ? "ALLOW" : "DROP ";
 
-    snprintf(buf, len, "[%s] %s | UDP  | %s:%-5u -> %s:%-5u | State: %u (%u bytes)",
+    snprintf(buf, len, "[%s] %s | UDP  | %s:%-5u -> %s:%-5u | State: %u (%u bytes) | Time(ns): ext=%u hash=%u lkp=%u upd=%u tot=%u",
              act_str, dir_str,
              src, ntohs(evt->src_port),
              dst, ntohs(evt->dst_port),
              evt->conn_state,
-             evt->pkt_len);
+             evt->pkt_len,
+             evt->time_extract_ns, evt->time_hash_ns,
+             evt->time_lookup_ns, evt->time_update_ns, evt->time_total_ns);
 }
 
 const struct protocol_adapter udp_adapter = {

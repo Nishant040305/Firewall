@@ -10,6 +10,7 @@
 
 #ifdef NO_OBSERVABILITY
 #define inc_stat(counter_key) do {} while (0)
+#define record_step_time(step_key, duration_ns) do {} while (0)
 #else
 /* Increment per-CPU stats counter safely */
 static __always_inline void inc_stat(__u32 counter_key)
@@ -19,7 +20,35 @@ static __always_inline void inc_stat(__u32 counter_key)
         *val += 1;
     }
 }
+
+/* Record per-operation step timing metrics into per-CPU perf_map */
+static __always_inline void record_step_time(__u32 step_key, __u64 duration_ns)
+{
+    struct step_metric *metric = bpf_map_lookup_elem(&perf_map, &step_key);
+    if (metric) {
+        metric->total_time_ns += duration_ns;
+        metric->count += 1;
+        if (metric->min_time_ns == 0 || duration_ns < metric->min_time_ns) {
+            metric->min_time_ns = duration_ns;
+        }
+        if (duration_ns > metric->max_time_ns) {
+            metric->max_time_ns = duration_ns;
+        }
+    }
+}
 #endif
+
+/* Fast 5-Tuple hash calculation */
+static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
+{
+    __u32 h = key->src_ip ^ key->dst_ip;
+    h ^= ((__u32)key->src_port << 16) | key->dst_port;
+    h ^= key->proto;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = h ^ (h >> 16);
+    return h;
+}
 
 /* Construct forward 5-tuple flow key */
 static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow_key *key)
@@ -47,7 +76,7 @@ static __always_inline void make_reverse_flow_key(const struct pkt_ctx *pkt, str
     key->pad[2] = 0;
 }
 
-/* Emit 5-tuple packet event to Userspace RingBuffer */
+/* Emit 5-tuple packet event with latency metrics to Userspace RingBuffer */
 static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
 {
     struct packet_event *evt;
@@ -71,6 +100,13 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
     evt->pad[0] = 0;
     evt->pad[1] = 0;
     evt->pad[2] = 0;
+
+    /* Execution timing analysis checks (nanoseconds) */
+    evt->time_extract_ns = pkt->time_extract_ns;
+    evt->time_hash_ns    = pkt->time_hash_ns;
+    evt->time_lookup_ns  = pkt->time_lookup_ns;
+    evt->time_update_ns  = pkt->time_update_ns;
+    evt->time_total_ns   = pkt->time_total_ns;
 
     bpf_ringbuf_submit(evt, 0);
 }

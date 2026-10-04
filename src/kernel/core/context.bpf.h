@@ -26,6 +26,13 @@ struct pkt_ctx {
     __u8  action;
     __u8  conn_state;
     __u32 rule_id;
+
+    /* Execution timing analysis for every packet (nanoseconds) */
+    __u32 time_extract_ns;
+    __u32 time_hash_ns;
+    __u32 time_lookup_ns;
+    __u32 time_update_ns;
+    __u32 time_total_ns;
 };
 
 /* Initialize packet context from raw XDP metadata (Ingress only) */
@@ -48,6 +55,11 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->time_extract_ns = 0;
+    pctx->time_hash_ns = 0;
+    pctx->time_lookup_ns = 0;
+    pctx->time_update_ns = 0;
+    pctx->time_total_ns = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
@@ -81,6 +93,11 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->time_extract_ns = 0;
+    pctx->time_hash_ns = 0;
+    pctx->time_lookup_ns = 0;
+    pctx->time_update_ns = 0;
+    pctx->time_total_ns = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;

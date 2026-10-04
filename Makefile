@@ -45,7 +45,12 @@ BPF_PASS_OBJ = $(BUILD_DIR)/xdp_pass.bpf.o
 BPF_FAST_OBJ = $(BUILD_DIR)/firewall_fast.bpf.o
 BPF_ZERO_OBJ = $(BUILD_DIR)/firewall_zero_obs.bpf.o
 
-all: $(BUILD_DIR) $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ) $(USER_BIN)
+BENCH_SRC = test/conntrack_bench_tool.c
+BENCH_BIN = $(BUILD_DIR)/conntrack_bench_tool
+PERF_BENCH_SRC = test/perf_timing_bench.c
+PERF_BENCH_BIN = $(BUILD_DIR)/perf_timing_bench
+
+all: $(BUILD_DIR) $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ) $(USER_BIN) tools
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/core $(BUILD_DIR)/utils $(BUILD_DIR)/protocols $(BUILD_DIR)/telemetry
@@ -73,6 +78,14 @@ $(BUILD_DIR)/%.o: src/userspace/%.c | $(BUILD_DIR)
 $(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
 	ln -sf fw-ctl $(CTL_ALIAS)
+
+tools: $(BENCH_BIN) $(PERF_BENCH_BIN)
+
+$(BENCH_BIN): $(BENCH_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -lbpf -lm -o $@
+
+$(PERF_BENCH_BIN): $(PERF_BENCH_SRC) src/userspace/core/stats_mgr.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -lm -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)

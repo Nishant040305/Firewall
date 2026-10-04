@@ -37,6 +37,15 @@ struct {
     __type(key, struct flow_key);
     __type(value, struct flow_entry);
     __uint(max_entries, MAX_FLOW_ENTRIES);
+    __uint(map_flags, BPF_F_NO_COMMON_LRU);
 } conntrack_map SEC(".maps");
+
+/* Per-CPU Performance & Latency Telemetry Map for Component-by-Component Timing */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, __u32);
+    __type(value, struct step_metric);
+    __uint(max_entries, STEP_MAX_OPS);
+} perf_map SEC(".maps");
 
 #endif /* __CORE_MAPS_BPF_H__ */

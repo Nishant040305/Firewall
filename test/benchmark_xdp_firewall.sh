@@ -18,7 +18,7 @@
 #   - Webserver (10.10.2.10) on incus-protect via veth
 #   - XDP firewall attached on client/attacker veth (Native Driver Mode)
 #
-# Usage: sudo ./test/benchmark_xdp_firewall.sh [--quick]
+# Usage: sudo ./test/benchmark_xdp_firewall.sh [--quick] [-o|--output <filename>] [filename]
 # ==============================================================================
 
 set -euo pipefail
@@ -27,9 +27,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FW_CTL="$ROOT_DIR/build/fw-ctl"
 RESULTS_DIR="$ROOT_DIR/benchmark_results"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULTS_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.json"
-REPORT_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.txt"
 
 # Test parameters (can be overridden)
 IPERF_DURATION="${IPERF_DURATION:-10}"
@@ -39,19 +36,83 @@ FLOOD_DURATION="${FLOOD_DURATION:-8}"
 CONCURRENT_STREAMS="${CONCURRENT_STREAMS:-1 4 8 16 32 64}"
 PACKET_SIZES="${PACKET_SIZES:-64 128 512 1024 1500}"
 QUICK_MODE=0
+CUSTOM_NAME=""
 
 WEBSERVER_IP="10.10.2.10"
 
-# Quick mode: shorter tests
-if [ "${1:-}" = "--quick" ]; then
-    QUICK_MODE=1
-    IPERF_DURATION=5
-    PING_COUNT=20
-    HTTP_COUNT=20
-    FLOOD_DURATION=5
-    CONCURRENT_STREAMS="1 4 16 64"
-    PACKET_SIZES="64 512 1500"
+# Parse CLI arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --quick|-q)
+            QUICK_MODE=1
+            IPERF_DURATION=5
+            PING_COUNT=20
+            HTTP_COUNT=20
+            FLOOD_DURATION=5
+            CONCURRENT_STREAMS="1 4 16 64"
+            PACKET_SIZES="64 512 1500"
+            shift
+            ;;
+        -o|--output|-f|--file|--name)
+            if [ -n "${2:-}" ]; then
+                CUSTOM_NAME="$2"
+                shift 2
+            else
+                echo "[-] Error: $1 requires a filename argument."
+                exit 1
+            fi
+            ;;
+        -h|--help)
+            echo "Usage: sudo $0 [--quick] [-o|--output <filename>] [filename]"
+            echo ""
+            echo "Options:"
+            echo "  --quick, -q               Run shorter benchmark tests"
+            echo "  -o, --output, -f, --name  Set custom output filename or path (saved to benchmark_results/)"
+            echo "  -h, --help                Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  sudo $0 my_benchmark_run"
+            echo "  sudo $0 -o custom_report --quick"
+            echo "  sudo $0 --output /tmp/my_test.txt"
+            exit 0
+            ;;
+        *)
+            if [ -z "$CUSTOM_NAME" ] && [[ "$1" != -* ]]; then
+                CUSTOM_NAME="$1"
+                shift
+            else
+                echo "[-] Warning: Unknown argument '$1' ignored."
+                shift
+            fi
+            ;;
+    esac
+done
+
+# Fallback to environment variables if provided
+CUSTOM_NAME="${CUSTOM_NAME:-${BENCHMARK_NAME:-${OUTPUT_NAME:-}}}"
+
+if [ -n "$CUSTOM_NAME" ]; then
+    # Strip extension (.txt or .json) if specified by user
+    BASE_NAME="${CUSTOM_NAME%.txt}"
+    BASE_NAME="${BASE_NAME%.json}"
+
+    if [[ "$BASE_NAME" == *"/"* ]]; then
+        OUT_DIR="$(dirname "$BASE_NAME")"
+        mkdir -p "$OUT_DIR"
+        RESULTS_FILE="${BASE_NAME}.json"
+        REPORT_FILE="${BASE_NAME}.txt"
+    else
+        RESULTS_FILE="$RESULTS_DIR/${BASE_NAME}.json"
+        REPORT_FILE="$RESULTS_DIR/${BASE_NAME}.txt"
+    fi
+else
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    RESULTS_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.json"
+    REPORT_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.txt"
 fi
+
+TELEMETRY_LOG="${REPORT_FILE%.txt}_telemetry.log"
+TELEMETRY_PID=""
 
 # ==============================================================================
 # SETUP & VALIDATION
@@ -69,10 +130,35 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 
+start_telemetry_monitor() {
+    rm -f "$TELEMETRY_LOG"
+    echo "[*] Periodic 5s telemetry file logging active -> $TELEMETRY_LOG"
+    (
+        while true; do
+            sleep 5
+            echo -e "\n========================================================================================\n  TELEMETRY SNAPSHOT [$(date '+%Y-%m-%d %H:%M:%S')] (5s interval)\n========================================================================================" >> "$TELEMETRY_LOG"
+            "$FW_CTL" stats show >> "$TELEMETRY_LOG" 2>&1 || true
+        done
+    ) &
+    TELEMETRY_PID=$!
+}
+
+stop_telemetry_monitor() {
+    if [ -n "$TELEMETRY_PID" ] && kill -0 "$TELEMETRY_PID" 2>/dev/null; then
+        kill "$TELEMETRY_PID" 2>/dev/null || true
+        wait "$TELEMETRY_PID" 2>/dev/null || true
+        TELEMETRY_PID=""
+    fi
+}
+
 # Automatically restore file ownership to the invoking non-root user upon exit
 fix_permissions() {
+    stop_telemetry_monitor
     if [ -n "${SUDO_USER:-}" ]; then
         chown -R "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$RESULTS_DIR" 2>/dev/null || true
+        [ -f "$RESULTS_FILE" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$RESULTS_FILE" 2>/dev/null || true
+        [ -f "$REPORT_FILE" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$REPORT_FILE" 2>/dev/null || true
+        [ -f "$TELEMETRY_LOG" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$TELEMETRY_LOG" 2>/dev/null || true
     fi
 }
 trap fix_permissions EXIT
@@ -896,8 +982,9 @@ HEADER
 
     echo ""
     echo -e "${GREEN}[+] Results saved:${RESET}"
-    echo "    Report: $REPORT_FILE"
-    echo "    JSON:   $RESULTS_FILE"
+    echo "    Report:    $REPORT_FILE"
+    echo "    JSON:      $RESULTS_FILE"
+    echo "    Telemetry: $TELEMETRY_LOG (recorded every 5s)"
 }
 
 # ==============================================================================
@@ -917,6 +1004,9 @@ echo "    CPUs:           $(nproc)"
     MAP_INFO=$(bpftool map show name conntrack_map 2>/dev/null | sed -n '1p' | sed 's/^[[:space:]]*//' || true)
     echo "    XDP Program:    ${XDP_INFO:-Not loaded}"
     echo "    Conntrack Map:  ${MAP_INFO:-Not loaded}"
+    echo "    Report File:    $REPORT_FILE"
+    echo "    Results JSON:   $RESULTS_FILE"
+    echo "    Telemetry Log:  $TELEMETRY_LOG"
     echo ""
 
 if [ "$QUICK_MODE" -eq 1 ]; then
@@ -931,12 +1021,19 @@ echo ""
 # Ensure webserver services are up
 ensure_services
 
+# Start periodic 5s telemetry logger
+start_telemetry_monitor
+
 run_phase1
 run_phase2
 run_phase3
 run_phase4
 run_phase5
 run_phase6
+
+# Stop periodic 5s telemetry logger
+stop_telemetry_monitor
+
 generate_report
 
 echo ""
