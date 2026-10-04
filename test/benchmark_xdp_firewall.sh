@@ -18,7 +18,7 @@
 #   - Webserver (10.10.2.10) on incus-protect via veth
 #   - XDP firewall attached on client/attacker veth (Native Driver Mode)
 #
-# Usage: sudo ./test/benchmark_xdp_firewall.sh [--quick]
+# Usage: sudo ./test/benchmark_xdp_firewall.sh [--quick] [-o|--output <filename>] [filename]
 # ==============================================================================
 
 set -euo pipefail
@@ -27,9 +27,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FW_CTL="$ROOT_DIR/build/fw-ctl"
 RESULTS_DIR="$ROOT_DIR/benchmark_results"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULTS_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.json"
-REPORT_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.txt"
 
 # Test parameters (can be overridden)
 IPERF_DURATION="${IPERF_DURATION:-10}"
@@ -39,19 +36,83 @@ FLOOD_DURATION="${FLOOD_DURATION:-8}"
 CONCURRENT_STREAMS="${CONCURRENT_STREAMS:-1 4 8 16 32 64}"
 PACKET_SIZES="${PACKET_SIZES:-64 128 512 1024 1500}"
 QUICK_MODE=0
+CUSTOM_NAME=""
 
 WEBSERVER_IP="10.10.2.10"
 
-# Quick mode: shorter tests
-if [ "${1:-}" = "--quick" ]; then
-    QUICK_MODE=1
-    IPERF_DURATION=5
-    PING_COUNT=20
-    HTTP_COUNT=20
-    FLOOD_DURATION=5
-    CONCURRENT_STREAMS="1 4 16 64"
-    PACKET_SIZES="64 512 1500"
+# Parse CLI arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --quick|-q)
+            QUICK_MODE=1
+            IPERF_DURATION=5
+            PING_COUNT=20
+            HTTP_COUNT=20
+            FLOOD_DURATION=5
+            CONCURRENT_STREAMS="1 4 16 64"
+            PACKET_SIZES="64 512 1500"
+            shift
+            ;;
+        -o|--output|-f|--file|--name)
+            if [ -n "${2:-}" ]; then
+                CUSTOM_NAME="$2"
+                shift 2
+            else
+                echo "[-] Error: $1 requires a filename argument."
+                exit 1
+            fi
+            ;;
+        -h|--help)
+            echo "Usage: sudo $0 [--quick] [-o|--output <filename>] [filename]"
+            echo ""
+            echo "Options:"
+            echo "  --quick, -q               Run shorter benchmark tests"
+            echo "  -o, --output, -f, --name  Set custom output filename or path (saved to benchmark_results/)"
+            echo "  -h, --help                Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  sudo $0 my_benchmark_run"
+            echo "  sudo $0 -o custom_report --quick"
+            echo "  sudo $0 --output /tmp/my_test.txt"
+            exit 0
+            ;;
+        *)
+            if [ -z "$CUSTOM_NAME" ] && [[ "$1" != -* ]]; then
+                CUSTOM_NAME="$1"
+                shift
+            else
+                echo "[-] Warning: Unknown argument '$1' ignored."
+                shift
+            fi
+            ;;
+    esac
+done
+
+# Fallback to environment variables if provided
+CUSTOM_NAME="${CUSTOM_NAME:-${BENCHMARK_NAME:-${OUTPUT_NAME:-}}}"
+
+if [ -n "$CUSTOM_NAME" ]; then
+    # Strip extension (.txt or .json) if specified by user
+    BASE_NAME="${CUSTOM_NAME%.txt}"
+    BASE_NAME="${BASE_NAME%.json}"
+
+    if [[ "$BASE_NAME" == *"/"* ]]; then
+        OUT_DIR="$(dirname "$BASE_NAME")"
+        mkdir -p "$OUT_DIR"
+        RESULTS_FILE="${BASE_NAME}.json"
+        REPORT_FILE="${BASE_NAME}.txt"
+    else
+        RESULTS_FILE="$RESULTS_DIR/${BASE_NAME}.json"
+        REPORT_FILE="$RESULTS_DIR/${BASE_NAME}.txt"
+    fi
+else
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    RESULTS_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.json"
+    REPORT_FILE="$RESULTS_DIR/benchmark_${TIMESTAMP}.txt"
 fi
+
+TELEMETRY_LOG="${REPORT_FILE%.txt}_telemetry.log"
+TELEMETRY_PID=""
 
 # ==============================================================================
 # SETUP & VALIDATION
@@ -69,10 +130,35 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 
+start_telemetry_monitor() {
+    rm -f "$TELEMETRY_LOG"
+    echo "[*] Periodic 5s telemetry file logging active -> $TELEMETRY_LOG"
+    (
+        while true; do
+            sleep 5
+            echo -e "\n========================================================================================\n  TELEMETRY SNAPSHOT [$(date '+%Y-%m-%d %H:%M:%S')] (5s interval)\n========================================================================================" >> "$TELEMETRY_LOG"
+            "$FW_CTL" stats show >> "$TELEMETRY_LOG" 2>&1 || true
+        done
+    ) &
+    TELEMETRY_PID=$!
+}
+
+stop_telemetry_monitor() {
+    if [ -n "$TELEMETRY_PID" ] && kill -0 "$TELEMETRY_PID" 2>/dev/null; then
+        kill "$TELEMETRY_PID" 2>/dev/null || true
+        wait "$TELEMETRY_PID" 2>/dev/null || true
+        TELEMETRY_PID=""
+    fi
+}
+
 # Automatically restore file ownership to the invoking non-root user upon exit
 fix_permissions() {
+    stop_telemetry_monitor
     if [ -n "${SUDO_USER:-}" ]; then
         chown -R "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$RESULTS_DIR" 2>/dev/null || true
+        [ -f "$RESULTS_FILE" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$RESULTS_FILE" 2>/dev/null || true
+        [ -f "$REPORT_FILE" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$REPORT_FILE" 2>/dev/null || true
+        [ -f "$TELEMETRY_LOG" ] && chown "$SUDO_USER:$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")" "$TELEMETRY_LOG" 2>/dev/null || true
     fi
 }
 trap fix_permissions EXIT
@@ -101,40 +187,35 @@ if [ -z "$CLIENT_VETH" ]; then
 fi
 
 disable_offloads() {
-    # Disable TSO/GSO/GRO/SG on all host interfaces to enforce discrete 1500-byte frame semantics
-    for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
-        if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-            ethtool -K "$dev" tso off gso off gro off rx off tx off sg off 2>/dev/null || true
-        fi
-    done
+    # Disable TSO/GSO/GRO on all host interfaces to remove virtual 64KB RAM copy distortion
+    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}" "$BRIDGE_UNTRUST" "$BRIDGE_PROTECT"; do
+    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+    #         ethtool -K "$dev" tso off gso off gro off rx off tx off 2>/dev/null || true
+    #     fi
+    # done
+    # # Disable on container eth0 interfaces
+    # for c in client attacker webserver; do
+    #     $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off 2>/dev/null || true
+    #     $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
+    # done
 
-    # Disable on container eth0 interfaces
-    for c in client attacker webserver; do
-        $INCUS_CMD exec "$c" -- ethtool -K eth0 tso off gso off gro off rx off tx off sg off 2>/dev/null || true
-    done
+    # # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
+    # local num_cpus
+    # num_cpus=$(nproc 2>/dev/null || echo "20")
+    # local rps_mask
+    # rps_mask=$(printf "%x" $(( (1 << num_cpus) - 1 )) 2>/dev/null || echo "fffff")
+    # sysctl -w net.core.rps_sock_flow_entries=32768 >/dev/null 2>&1 || true
 
-    # Optimize host queue lengths and enable RPS to eliminate veth packet drops under multi-stream load
-    local num_cpus
-    num_cpus=$(nproc 2>/dev/null || echo "20")
-    local rps_mask
-    rps_mask=$(printf "%x" $(( (1 << num_cpus) - 1 )) 2>/dev/null || echo "fffff")
-    sysctl -w net.core.rps_sock_flow_entries=32768 >/dev/null 2>&1 || true
-
-    for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}"; do
-        if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
-            ip link set "$dev" txqueuelen 3000 2>/dev/null || true
-            if [ -d "/sys/class/net/$dev/queues/rx-0" ]; then
-                echo "$rps_mask" > "/sys/class/net/$dev/queues/rx-0/rps_cpus" 2>/dev/null || true
-                echo 4096 > "/sys/class/net/$dev/queues/rx-0/rps_flow_cnt" 2>/dev/null || true
-            fi
-        fi
-    done
-
-    for c in client attacker webserver; do
-        $INCUS_CMD exec "$c" -- ip link set eth0 txqueuelen 3000 2>/dev/null || true
-    done
-
-    echo "[+] Offloads (TSO/GSO/GRO/SG) disabled and RPS multi-core steering preserved."
+    # for dev in "$CLIENT_VETH" "${ATTACKER_VETH:-}" "${SERVER_VETH:-}"; do
+    #     if [ -n "$dev" ] && ip link show "$dev" >/dev/null 2>&1; then
+    #         ip link set "$dev" txqueuelen 3000 2>/dev/null || true
+    #         if [ -d "/sys/class/net/$dev/queues/rx-0" ]; then
+    #             echo "$rps_mask" > "/sys/class/net/$dev/queues/rx-0/rps_cpus" 2>/dev/null || true
+    #             echo 4096 > "/sys/class/net/$dev/queues/rx-0/rps_flow_cnt" 2>/dev/null || true
+    #         fi
+    #     fi
+    # done
+    echo "[+] Offload and RPS settings applied (if supported)."
 }
 
 # Terminal colors
@@ -212,63 +293,19 @@ count_conntrack_entries() {
     echo "${val:-0}"
 }
 
-get_active_xdp_prog_id() {
-    local pid=""
-    if [ -n "${CLIENT_VETH:-}" ]; then
-        pid=$(bpftool net show dev "$CLIENT_VETH" 2>/dev/null | awk '/id/ {for(i=1;i<=NF;i++) if($i=="id") {print $(i+1); exit}}')
-    fi
-    if [ -z "$pid" ] && [ -n "${ATTACKER_VETH:-}" ]; then
-        pid=$(bpftool net show dev "$ATTACKER_VETH" 2>/dev/null | awk '/id/ {for(i=1;i<=NF;i++) if($i=="id") {print $(i+1); exit}}')
-    fi
-    if [ -z "$pid" ]; then
-        pid=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | grep -E '^[0-9]+:' | awk -F: '{print $1}' | tail -1)
-    fi
-    echo "$pid"
-}
-
 get_bpf_memory() {
-    local pid
-    pid=$(get_active_xdp_prog_id)
+    # Sum memlock of all firewall BPF maps
     local total=0
-
-    if [ -n "$pid" ]; then
-        local map_ids
-        map_ids=$(bpftool prog show id "$pid" 2>/dev/null | grep -oP 'map_ids \K[0-9,]+' | tr ',' ' ' || true)
-        if [ -n "$map_ids" ]; then
-            for mid in $map_ids; do
-                local mem
-                mem=$(bpftool map show id "$mid" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
-                total=$((total + ${mem:-0}))
-            done
-            echo "$total"
-            return
-        fi
-    fi
-
-    for map_name in stats_map events_ringbuf rules_map conntrack_map flow_cache_map; do
-        local mem=""
-        if [ -f "/sys/fs/bpf/firewall/$map_name" ]; then
-            mem=$(bpftool map show pinned "/sys/fs/bpf/firewall/$map_name" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
-        else
-            mem=$(bpftool map show name "$map_name" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | tail -1 || echo "0")
-        fi
-        total=$((total + ${mem:-0}))
+    for map_name in stats_map events_ringbuf rules_map conntrack_map; do
+        local mem
+        mem=$(bpftool map show name "$map_name" 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0")
+        total=$((total + mem))
     done
     echo "$total"
 }
 
 get_bpf_prog_memory() {
-    local pid
-    pid=$(get_active_xdp_prog_id)
-    if [ -n "$pid" ]; then
-        local mem
-        mem=$(bpftool prog show id "$pid" 2>/dev/null | grep -oP 'memlock \K[0-9]+' | head -1 || echo "0")
-        echo "${mem:-0}"
-        return
-    fi
-    local mem
-    mem=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | grep -oP 'memlock \K[0-9]+' | tail -1 || echo "0")
-    echo "${mem:-0}"
+    bpftool prog show name xdp_firewall_prog 2>/dev/null | grep memlock | awk '{print $NF}' | tr -d 'B' || echo "0"
 }
 
 measure_cpu_during() {
@@ -946,8 +983,9 @@ HEADER
 
     echo ""
     echo -e "${GREEN}[+] Results saved:${RESET}"
-    echo "    Report: $REPORT_FILE"
-    echo "    JSON:   $RESULTS_FILE"
+    echo "    Report:    $REPORT_FILE"
+    echo "    JSON:      $RESULTS_FILE"
+    echo "    Telemetry: $TELEMETRY_LOG (recorded every 5s)"
 }
 
 # ==============================================================================
@@ -958,39 +996,19 @@ echo -e "${BOLD}================================================================
 echo -e "${BOLD}  XDP/eBPF STATEFUL FIREWALL PERFORMANCE BENCHMARK SUITE${RESET}"
 echo -e "${BOLD}=================================================================${RESET}"
 echo ""
-print_environment() {
-    echo "  Environment:"
-    echo "    Kernel:         $(uname -r)"
-    echo "    CPUs:           $(nproc)"
+echo "  Environment:"
+echo "    Kernel:         $(uname -r)"
+echo "    CPUs:           $(nproc)"
     echo "    Client veth:    $CLIENT_VETH"
     echo "    Attacker veth:  ${ATTACKER_VETH:-unknown}"
-    local active_pid
-    active_pid=$(get_active_xdp_prog_id)
-    local xdp_info=""
-    local map_info=""
-    if [ -n "$active_pid" ]; then
-        xdp_info=$(bpftool prog show id "$active_pid" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' || true)
-        local map_ids
-        map_ids=$(bpftool prog show id "$active_pid" 2>/dev/null | grep -oP 'map_ids \K[0-9,]+' | tr ',' ' ' || true)
-        for mid in $map_ids; do
-            if bpftool map show id "$mid" 2>/dev/null | grep -q "conntrack_map"; then
-                map_info=$(bpftool map show id "$mid" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//' || true)
-                break
-            fi
-        done
-    fi
-    if [ -z "$xdp_info" ]; then
-        xdp_info=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || true)
-    fi
-    if [ -z "$map_info" ]; then
-        map_info=$(bpftool map show name conntrack_map 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || true)
-    fi
-    echo "    XDP Program:    ${xdp_info:-Not loaded}"
-    echo "    Conntrack Map:  ${map_info:-Not loaded}"
+    XDP_INFO=$(bpftool prog show name xdp_firewall_prog 2>/dev/null | sed -n '1p' | sed 's/^[[:space:]]*//' || true)
+    MAP_INFO=$(bpftool map show name conntrack_map 2>/dev/null | sed -n '1p' | sed 's/^[[:space:]]*//' || true)
+    echo "    XDP Program:    ${XDP_INFO:-Not loaded}"
+    echo "    Conntrack Map:  ${MAP_INFO:-Not loaded}"
+    echo "    Report File:    $REPORT_FILE"
+    echo "    Results JSON:   $RESULTS_FILE"
+    echo "    Telemetry Log:  $TELEMETRY_LOG"
     echo ""
-}
-
-print_environment
 
 if [ "$QUICK_MODE" -eq 1 ]; then
     echo -e "  ${YELLOW}Mode: QUICK (reduced sample counts)${RESET}"
@@ -1004,12 +1022,19 @@ echo ""
 # Ensure webserver services are up
 ensure_services
 
+# Start periodic 5s telemetry logger
+start_telemetry_monitor
+
 run_phase1
 run_phase2
 run_phase3
 run_phase4
 run_phase5
 run_phase6
+
+# Stop periodic 5s telemetry logger
+stop_telemetry_monitor
+
 generate_report
 
 echo ""

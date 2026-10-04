@@ -47,6 +47,15 @@ static char *trim_whitespace(char *str)
         *end = '\0';
         end--;
     }
+
+    /* Strip surrounding quotes if present (e.g. "path" or 'path') */
+    if ((*str == '"' && *end == '"') || (*str == '\'' && *end == '\'')) {
+        if (end > str) {
+            *end = '\0';
+            str++;
+        }
+    }
+
     return str;
 }
 
@@ -123,6 +132,10 @@ int config_load_file(const char *path, struct firewall_config *cfg)
                 cfg->global.ringbuf_poll_timeout_ms = atoi(val);
             } else if (strcmp(key, "default_policy") == 0) {
                 cfg->global.default_policy = (strcmp(val, "pass") == 0 || strcmp(val, "allow") == 0 || strcmp(val, "1") == 0) ? 1 : 0;
+            } else if (strcmp(key, "telemetry_file") == 0) {
+                snprintf(cfg->global.telemetry_file, sizeof(cfg->global.telemetry_file), "%s", val);
+            } else if (strcmp(key, "telemetry_json") == 0) {
+                cfg->global.telemetry_json = (strcmp(val, "true") == 0 || strcmp(val, "1") == 0) ? 1 : 0;
             }
         }
     }
@@ -149,4 +162,7 @@ void config_dump(const struct firewall_config *cfg)
     printf("    - Mode:      %s\n", mode_to_str(cfg->mode));
     printf("    - Direction: %s\n", direction_to_str(cfg->direction));
     printf("    - Log Level: %s\n", cfg->log_level);
+    if (cfg->global.telemetry_file[0]) {
+        printf("    - Telemetry: %s (every %ds)\n", cfg->global.telemetry_file, cfg->global.stats_interval_sec);
+    }
 }

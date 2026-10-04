@@ -25,23 +25,40 @@
 /* Process TCP state machine (Step 9) */
 static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    const struct flow_key *fwd_key = &pkt->flow;
+    /* Step: 5-Tuple Key Extraction & Hash Calculation */
+    __u64 t_hash_start = bpf_ktime_get_ns();
+    struct flow_key fwd_key, rev_key;
+    make_flow_key(pkt, &fwd_key);
+    make_reverse_flow_key(pkt, &rev_key);
+    __u32 flow_hash = calc_flow_hash(&fwd_key);
+    __u64 t_hash_end = bpf_ktime_get_ns();
+    pkt->time_hash_ns = (__u32)(t_hash_end - t_hash_start);
+    record_step_time(STEP_HASH_CAL, pkt->time_hash_ns);
+
     __u8 flags = pkt->tcp_flags;
 
-    /* 1. L1 Fast-Path Cache Lookup (Per-CPU Direct-Indexed Array) */
-    __u32 flow_hash = calc_flow_hash(fwd_key);
+    /* Step: L1 Fast-Path Cache Lookup */
+    __u64 t_cache_start = bpf_ktime_get_ns();
     __u32 cache_idx = flow_hash & FLOW_CACHE_MASK;
     struct flow_cache_entry *cached = bpf_map_lookup_elem(&flow_cache_map, &cache_idx);
+    __u64 t_cache_end = bpf_ktime_get_ns();
+    __u64 cache_lkp_ns = t_cache_end - t_cache_start;
+    record_step_time(STEP_LOOKUP_CACHE, cache_lkp_ns);
 
+    /* Fast-Path Established Flow Hit */
     if (cached && !(flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST))) {
-        if (flow_keys_equal(&cached->key, fwd_key) &&
+        if (flow_keys_equal(&cached->key, &fwd_key) &&
             cached->state == CONN_STATE_ESTABLISHED &&
             (now <= cached->last_seen_ns || (now - cached->last_seen_ns <= cached->timeout_ns))) {
 
-            /* Fast Path Hit! Zero locks, zero hash bucket traversal, immediate pass */
+            inc_stat(STAT_CACHE_HITS);
+            pkt->time_lookup_ns = (__u32)cache_lkp_ns;
+            record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
+            /* Lazy refresh to authoritative conntrack map every CONNTRACK_REFRESH_INTERVAL_NS */
             if (now > cached->last_seen_ns && (now - cached->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 cached->last_seen_ns = now;
-                struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
+                struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
                 if (entry) {
                     entry->last_seen_ns = now;
                     entry->packets_forward += 1;
@@ -55,18 +72,32 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         }
     }
 
-    /* 2. Fast Path Miss -> Authoritative LRU Hash Table Lookup */
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
+    inc_stat(STAT_CACHE_MISSES);
 
-    /* 2a. TCP SYN (Initial connection request) */
+    /* Step: Authoritative Conntrack State Table Lookup */
+    __u64 t_ct_start = bpf_ktime_get_ns();
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    __u64 t_ct_end = bpf_ktime_get_ns();
+    __u64 ct_lookup_ns = t_ct_end - t_ct_start;
+    record_step_time(STEP_LOOKUP_CONNTRACK, ct_lookup_ns);
+
+    /* 1. TCP SYN (Initial connection request) */
     if ((flags & TCP_FLAG_SYN) && !(flags & TCP_FLAG_ACK)) {
-        if (cached && flow_keys_equal(&cached->key, fwd_key)) {
+        if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
             cached->state = CONN_STATE_INVALID;
             cached->key.proto = 0;
         }
 
-        /* Evaluate policy rules */
+        /* Step: Dynamic Rule Engine Lookup */
+        __u64 t_rule_start = bpf_ktime_get_ns();
         int rule_action = evaluate_rules(pkt);
+        __u64 t_rule_end = bpf_ktime_get_ns();
+        __u64 rule_lookup_ns = t_rule_end - t_rule_start;
+        record_step_time(STEP_LOOKUP_RULES, rule_lookup_ns);
+
+        pkt->time_lookup_ns = (__u32)(cache_lkp_ns + ct_lookup_ns + rule_lookup_ns);
+        record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
         if (rule_action != ACTION_PASS) {
             inc_stat(STAT_DROPPED_RULE);
             pkt->action = ACTION_DROP;
@@ -74,7 +105,8 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             return ACTION_DROP;
         }
 
-        /* Create forward flow entry */
+        /* Step: State Table Update (Forward & Reverse Flow Insertion) */
+        __u64 t_upd_start = bpf_ktime_get_ns();
         struct flow_entry new_entry = {
             .state = CONN_STATE_SYN_SENT,
             .flags_seen = flags,
@@ -86,11 +118,8 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, fwd_key, &new_entry, BPF_ANY);
+        bpf_map_update_elem(&conntrack_map, &fwd_key, &new_entry, BPF_ANY);
 
-        /* Create reverse flow entry awaiting SYN-ACK (LAZY ALLOCATION) */
-        struct flow_key rev_key;
-        make_reverse_flow_key(pkt, &rev_key);
         struct flow_entry rev_entry = {
             .state = CONN_STATE_SYN_SENT,
             .flags_seen = 0,
@@ -103,6 +132,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
         bpf_map_update_elem(&conntrack_map, &rev_key, &rev_entry, BPF_ANY);
+        __u64 t_upd_end = bpf_ktime_get_ns();
+        __u64 upd_ns = t_upd_end - t_upd_start;
+        record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+        pkt->time_update_ns += (__u32)upd_ns;
 
         inc_stat(STAT_CONN_NEW);
         pkt->action = ACTION_PASS;
@@ -110,19 +143,26 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         return ACTION_PASS;
     }
 
-    /* 2b. Check for existing connection */
+    pkt->time_lookup_ns = (__u32)(cache_lkp_ns + ct_lookup_ns);
+    record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
+    /* 2. Check for existing connection */
     if (entry) {
         /* Check timeout (guard against multi-core clock skew underflow: now > entry->last_seen_ns) */
         if (now > entry->last_seen_ns && (now - entry->last_seen_ns > entry->timeout_ns)) {
-            struct flow_key rev_key;
-            make_reverse_flow_key(pkt, &rev_key);
             inc_stat(STAT_CONN_TIMEOUT);
-            bpf_map_delete_elem(&conntrack_map, fwd_key);
+            __u64 t_del_start = bpf_ktime_get_ns();
+            bpf_map_delete_elem(&conntrack_map, &fwd_key);
             bpf_map_delete_elem(&conntrack_map, &rev_key);
-            if (cached && flow_keys_equal(&cached->key, fwd_key)) {
+            if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
                 cached->state = CONN_STATE_CLOSED;
                 cached->key.proto = 0;
             }
+            __u64 t_del_end = bpf_ktime_get_ns();
+            __u64 del_ns = t_del_end - t_del_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, del_ns);
+            pkt->time_update_ns += (__u32)del_ns;
+
             inc_stat(STAT_DROPPED_UNSOLICITED);
             pkt->action = ACTION_DROP;
             pkt->conn_state = CONN_STATE_INVALID;
@@ -131,6 +171,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* TCP SYN-ACK Response from Server */
         if ((flags & TCP_FLAG_SYN) && (flags & TCP_FLAG_ACK)) {
+            __u64 t_upd_start = bpf_ktime_get_ns();
             entry->state = CONN_STATE_SYN_RECV;
             if (now > entry->last_seen_ns) {
                 entry->last_seen_ns = now;
@@ -139,6 +180,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             entry->bytes_reverse += pkt->pkt_len;
             entry->flags_seen |= flags;
             entry->timeout_ns = TCP_SYN_TIMEOUT_NS;
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
 
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_SYN_RECV;
@@ -147,6 +192,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* TCP ACK or Data packet */
         if (flags & TCP_FLAG_ACK) {
+            __u64 t_upd_start = bpf_ktime_get_ns();
             if (entry->state == CONN_STATE_SYN_RECV || entry->state == CONN_STATE_SYN_SENT) {
                 /* State transition: write is mandatory */
                 entry->state = CONN_STATE_ESTABLISHED;
@@ -157,9 +203,9 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                 entry->flags_seen |= flags;
                 inc_stat(STAT_CONN_ESTABLISHED);
 
-                /* Populate L1 cache on handshake completion */
+                /* Populate L1 cache on initial establishment */
                 if (cached) {
-                    cached->key = *fwd_key;
+                    cached->key = fwd_key;
                     cached->state = CONN_STATE_ESTABLISHED;
                     cached->last_seen_ns = now;
                     cached->timeout_ns = TCP_ESTABLISHED_TIMEOUT_NS;
@@ -167,7 +213,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             } else if (entry->state == CONN_STATE_ESTABLISHED) {
                 /* Populate L1 cache on miss */
                 if (cached) {
-                    cached->key = *fwd_key;
+                    cached->key = fwd_key;
                     cached->state = CONN_STATE_ESTABLISHED;
                     cached->last_seen_ns = now;
                     cached->timeout_ns = entry->timeout_ns;
@@ -184,7 +230,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
             /* Handle connection termination (FIN / RST) */
             if (flags & (TCP_FLAG_RST | TCP_FLAG_FIN)) {
-                if (cached && flow_keys_equal(&cached->key, fwd_key)) {
+                if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
                     cached->state = CONN_STATE_CLOSED;
                     cached->key.proto = 0;
                 }
@@ -199,6 +245,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                     entry->last_seen_ns = now;
                 }
             }
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
 
             pkt->action = ACTION_PASS;
             pkt->conn_state = entry->state;
@@ -207,15 +257,20 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
         /* Handle standalone RST or FIN */
         if (flags & (TCP_FLAG_RST | TCP_FLAG_FIN)) {
-            if (cached && flow_keys_equal(&cached->key, fwd_key)) {
+            if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
                 cached->state = CONN_STATE_CLOSED;
                 cached->key.proto = 0;
             }
+            __u64 t_upd_start = bpf_ktime_get_ns();
             if (now > entry->last_seen_ns) {
                 entry->last_seen_ns = now;
             }
             entry->state = (flags & TCP_FLAG_RST) ? CONN_STATE_CLOSED : CONN_STATE_FIN_WAIT;
             entry->timeout_ns = TCP_CLOSE_TIMEOUT_NS;
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
 
             pkt->action = ACTION_PASS;
             pkt->conn_state = entry->state;
@@ -225,11 +280,12 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         /* Other valid packets on established flow */
         if (entry->state == CONN_STATE_ESTABLISHED) {
             if (cached) {
-                cached->key = *fwd_key;
+                cached->key = fwd_key;
                 cached->state = CONN_STATE_ESTABLISHED;
                 cached->last_seen_ns = now;
                 cached->timeout_ns = entry->timeout_ns;
             }
+            __u64 t_upd_start = bpf_ktime_get_ns();
             if (now > entry->last_seen_ns &&
                 (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
@@ -237,6 +293,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                 entry->packets_forward += 1;
                 entry->bytes_forward += pkt->pkt_len;
             }
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
 
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_ESTABLISHED;
@@ -244,7 +304,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         }
     }
 
-    /* 3. Unsolicited non-SYN packet with no state in conntrack -> DROP */
+    /* 3. Unsolicited non-SYN packet with no state in conntrack -> DROP (Step 14 Test Case 4) */
     inc_stat(STAT_DROPPED_UNSOLICITED);
     pkt->action = ACTION_DROP;
     pkt->conn_state = CONN_STATE_INVALID;
@@ -254,68 +314,114 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 /* Process UDP pseudo-connection state (Step 9) */
 static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    const struct flow_key *fwd_key = &pkt->flow;
+    /* Step: 5-Tuple Key Extraction & Hash Calculation */
+    __u64 t_hash_start = bpf_ktime_get_ns();
+    struct flow_key fwd_key, rev_key;
+    make_flow_key(pkt, &fwd_key);
+    make_reverse_flow_key(pkt, &rev_key);
+    __u32 flow_hash = calc_flow_hash(&fwd_key);
+    __u64 t_hash_end = bpf_ktime_get_ns();
+    pkt->time_hash_ns = (__u32)(t_hash_end - t_hash_start);
+    record_step_time(STEP_HASH_CAL, pkt->time_hash_ns);
 
-    /* 1. L1 Fast-Path Cache Lookup */
-    __u32 flow_hash = calc_flow_hash(fwd_key);
+    /* Step: L1 Fast-Path Cache Lookup */
+    __u64 t_cache_start = bpf_ktime_get_ns();
     __u32 cache_idx = flow_hash & FLOW_CACHE_MASK;
     struct flow_cache_entry *cached = bpf_map_lookup_elem(&flow_cache_map, &cache_idx);
+    __u64 t_cache_end = bpf_ktime_get_ns();
+    __u64 cache_lkp_ns = t_cache_end - t_cache_start;
+    record_step_time(STEP_LOOKUP_CACHE, cache_lkp_ns);
 
-    if (cached && flow_keys_equal(&cached->key, fwd_key) &&
-        cached->state == CONN_STATE_UDP_ACTIVE &&
-        (now <= cached->last_seen_ns || (now - cached->last_seen_ns <= cached->timeout_ns))) {
+    /* Fast-Path UDP Hit */
+    if (cached) {
+        if (flow_keys_equal(&cached->key, &fwd_key) &&
+            cached->state == CONN_STATE_UDP_ACTIVE &&
+            (now <= cached->last_seen_ns || (now - cached->last_seen_ns <= cached->timeout_ns))) {
 
-        if (now > cached->last_seen_ns && (now - cached->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
-            cached->last_seen_ns = now;
-            struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
-            if (entry) {
-                entry->last_seen_ns = now;
-                entry->packets_forward += 1;
-                entry->bytes_forward += pkt->pkt_len;
-            }
-        }
+            inc_stat(STAT_CACHE_HITS);
+            pkt->time_lookup_ns = (__u32)cache_lkp_ns;
+            record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
 
-        pkt->action = ACTION_PASS;
-        pkt->conn_state = CONN_STATE_UDP_ACTIVE;
-        return ACTION_PASS;
-    }
-
-    /* 2. Fast Path Miss -> Authoritative conntrack_map Lookup */
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
-
-    if (entry) {
-        if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
-            if (cached) {
-                cached->key = *fwd_key;
-                cached->state = CONN_STATE_UDP_ACTIVE;
+            /* Lazy refresh to authoritative conntrack map */
+            if (now > cached->last_seen_ns && (now - cached->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 cached->last_seen_ns = now;
-                cached->timeout_ns = entry->timeout_ns;
-            }
-
-            if (now > entry->last_seen_ns &&
-                (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
-                entry->last_seen_ns = now;
-                entry->packets_forward += 1;
-                entry->bytes_forward += pkt->pkt_len;
+                struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+                if (entry) {
+                    entry->last_seen_ns = now;
+                    entry->packets_forward += 1;
+                    entry->bytes_forward += pkt->pkt_len;
+                }
             }
 
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_UDP_ACTIVE;
             return ACTION_PASS;
         }
+    }
+
+    inc_stat(STAT_CACHE_MISSES);
+
+    /* Step: Conntrack Lookup */
+    __u64 t_ct_start = bpf_ktime_get_ns();
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    __u64 t_ct_end = bpf_ktime_get_ns();
+    __u64 ct_lookup_ns = t_ct_end - t_ct_start;
+    record_step_time(STEP_LOOKUP_CONNTRACK, ct_lookup_ns);
+
+    if (entry) {
+        if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
+            pkt->time_lookup_ns = (__u32)(cache_lkp_ns + ct_lookup_ns);
+            record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
+            /* Populate L1 cache on hit */
+            if (cached) {
+                cached->key = fwd_key;
+                cached->state = CONN_STATE_UDP_ACTIVE;
+                cached->last_seen_ns = now;
+                cached->timeout_ns = entry->timeout_ns;
+            }
+
+            /* Step: Conntrack Update (Lazy Refresh) */
+            __u64 t_upd_start = bpf_ktime_get_ns();
+            if (now > entry->last_seen_ns &&
+                (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
+                entry->last_seen_ns = now;
+                entry->packets_forward += 1;
+                entry->bytes_forward += pkt->pkt_len;
+            }
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
+
+            pkt->action = ACTION_PASS;
+            pkt->conn_state = CONN_STATE_UDP_ACTIVE;
+            return ACTION_PASS;
+        }
         /* Expired */
-        if (cached && flow_keys_equal(&cached->key, fwd_key)) {
+        if (cached && flow_keys_equal(&cached->key, &fwd_key)) {
             cached->state = CONN_STATE_CLOSED;
             cached->key.proto = 0;
         }
-        struct flow_key rev_key;
-        make_reverse_flow_key(pkt, &rev_key);
-        bpf_map_delete_elem(&conntrack_map, fwd_key);
+        __u64 t_del_start = bpf_ktime_get_ns();
+        bpf_map_delete_elem(&conntrack_map, &fwd_key);
         bpf_map_delete_elem(&conntrack_map, &rev_key);
+        __u64 t_del_end = bpf_ktime_get_ns();
+        __u64 del_ns = t_del_end - t_del_start;
+        record_step_time(STEP_UPDATE_CONNTRACK, del_ns);
+        pkt->time_update_ns += (__u32)del_ns;
     }
 
     /* Evaluate rules for new UDP flow */
+    __u64 t_rule_start = bpf_ktime_get_ns();
     int rule_action = evaluate_rules(pkt);
+    __u64 t_rule_end = bpf_ktime_get_ns();
+    __u64 rule_lookup_ns = t_rule_end - t_rule_start;
+    record_step_time(STEP_LOOKUP_RULES, rule_lookup_ns);
+
+    pkt->time_lookup_ns = (__u32)(cache_lkp_ns + ct_lookup_ns + rule_lookup_ns);
+    record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
     if (rule_action != ACTION_PASS) {
         inc_stat(STAT_DROPPED_RULE);
         pkt->action = ACTION_DROP;
@@ -323,7 +429,8 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
         return ACTION_DROP;
     }
 
-    /* Create forward and reverse UDP state entries (Lazy Reverse Allocation) */
+    /* Create forward and reverse UDP state entries */
+    __u64 t_upd_start = bpf_ktime_get_ns();
     struct flow_entry new_fwd = {
         .state = CONN_STATE_UDP_ACTIVE,
         .flags_seen = 0,
@@ -335,10 +442,8 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
         .bytes_reverse = 0,
         .timeout_ns = UDP_TIMEOUT_NS,
     };
-    bpf_map_update_elem(&conntrack_map, fwd_key, &new_fwd, BPF_ANY);
+    bpf_map_update_elem(&conntrack_map, &fwd_key, &new_fwd, BPF_ANY);
 
-    struct flow_key rev_key;
-    make_reverse_flow_key(pkt, &rev_key);
     struct flow_entry new_rev = {
         .state = CONN_STATE_UDP_ACTIVE,
         .flags_seen = 0,
@@ -354,11 +459,16 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 
     /* Populate L1 cache for new UDP flow */
     if (cached) {
-        cached->key = *fwd_key;
+        cached->key = fwd_key;
         cached->state = CONN_STATE_UDP_ACTIVE;
         cached->last_seen_ns = now;
         cached->timeout_ns = UDP_TIMEOUT_NS;
     }
+
+    __u64 t_upd_end = bpf_ktime_get_ns();
+    __u64 upd_ns = t_upd_end - t_upd_start;
+    record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+    pkt->time_update_ns += (__u32)upd_ns;
 
     inc_stat(STAT_CONN_NEW);
     pkt->action = ACTION_PASS;
@@ -369,30 +479,64 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
 /* Process ICMP Echo session state (Step 9) */
 static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
 {
-    const struct flow_key *fwd_key = &pkt->flow;
+    /* Step: 5-Tuple Key Extraction & Hash Calculation */
+    __u64 t_hash_start = bpf_ktime_get_ns();
+    struct flow_key fwd_key, rev_key;
+    make_flow_key(pkt, &fwd_key);
+    make_reverse_flow_key(pkt, &rev_key);
+    calc_flow_hash(&fwd_key);
+    __u64 t_hash_end = bpf_ktime_get_ns();
+    pkt->time_hash_ns = (__u32)(t_hash_end - t_hash_start);
+    record_step_time(STEP_HASH_CAL, pkt->time_hash_ns);
 
-    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, fwd_key);
+    /* Step: Conntrack Lookup */
+    __u64 t_ct_start = bpf_ktime_get_ns();
+    struct flow_entry *entry = bpf_map_lookup_elem(&conntrack_map, &fwd_key);
+    __u64 t_ct_end = bpf_ktime_get_ns();
+    __u64 ct_lookup_ns = t_ct_end - t_ct_start;
+    record_step_time(STEP_LOOKUP_CONNTRACK, ct_lookup_ns);
+
     if (entry) {
         if (now <= entry->last_seen_ns || (now - entry->last_seen_ns <= entry->timeout_ns)) {
-            /* Lazy refresh: only write if interval elapsed */
+            pkt->time_lookup_ns = (__u32)ct_lookup_ns;
+            record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
+            /* Step: Conntrack Update (Lazy Refresh) */
+            __u64 t_upd_start = bpf_ktime_get_ns();
             if (now > entry->last_seen_ns &&
                 (now - entry->last_seen_ns) > CONNTRACK_REFRESH_INTERVAL_NS) {
                 entry->last_seen_ns = now;
                 entry->packets_forward += 1;
                 entry->bytes_forward += pkt->pkt_len;
             }
+            __u64 t_upd_end = bpf_ktime_get_ns();
+            __u64 upd_ns = t_upd_end - t_upd_start;
+            record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+            pkt->time_update_ns += (__u32)upd_ns;
+
             pkt->action = ACTION_PASS;
             pkt->conn_state = CONN_STATE_ICMP_ACTIVE;
             return ACTION_PASS;
         }
-        struct flow_key rev_key;
-        make_reverse_flow_key(pkt, &rev_key);
-        bpf_map_delete_elem(&conntrack_map, fwd_key);
+        __u64 t_del_start = bpf_ktime_get_ns();
+        bpf_map_delete_elem(&conntrack_map, &fwd_key);
         bpf_map_delete_elem(&conntrack_map, &rev_key);
+        __u64 t_del_end = bpf_ktime_get_ns();
+        __u64 del_ns = t_del_end - t_del_start;
+        record_step_time(STEP_UPDATE_CONNTRACK, del_ns);
+        pkt->time_update_ns += (__u32)del_ns;
     }
 
     /* Evaluate rules for new ICMP flow */
+    __u64 t_rule_start = bpf_ktime_get_ns();
     int rule_action = evaluate_rules(pkt);
+    __u64 t_rule_end = bpf_ktime_get_ns();
+    __u64 rule_lookup_ns = t_rule_end - t_rule_start;
+    record_step_time(STEP_LOOKUP_RULES, rule_lookup_ns);
+
+    pkt->time_lookup_ns = (__u32)(ct_lookup_ns + rule_lookup_ns);
+    record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+
     if (rule_action != ACTION_PASS) {
         inc_stat(STAT_DROPPED_RULE);
         pkt->action = ACTION_DROP;
@@ -400,6 +544,7 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
         return ACTION_DROP;
     }
 
+    __u64 t_upd_start = bpf_ktime_get_ns();
     struct flow_entry new_fwd = {
         .state = CONN_STATE_ICMP_ACTIVE,
         .flags_seen = 0,
@@ -411,10 +556,8 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
         .bytes_reverse = 0,
         .timeout_ns = ICMP_TIMEOUT_NS,
     };
-    bpf_map_update_elem(&conntrack_map, fwd_key, &new_fwd, BPF_ANY);
+    bpf_map_update_elem(&conntrack_map, &fwd_key, &new_fwd, BPF_ANY);
 
-    struct flow_key rev_key;
-    make_reverse_flow_key(pkt, &rev_key);
     struct flow_entry new_rev = {
         .state = CONN_STATE_ICMP_ACTIVE,
         .flags_seen = 0,
@@ -427,6 +570,10 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
         .timeout_ns = ICMP_TIMEOUT_NS,
     };
     bpf_map_update_elem(&conntrack_map, &rev_key, &new_rev, BPF_ANY);
+    __u64 t_upd_end = bpf_ktime_get_ns();
+    __u64 upd_ns = t_upd_end - t_upd_start;
+    record_step_time(STEP_UPDATE_CONNTRACK, upd_ns);
+    pkt->time_update_ns += (__u32)upd_ns;
 
     inc_stat(STAT_CONN_NEW);
     pkt->action = ACTION_PASS;

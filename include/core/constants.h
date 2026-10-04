@@ -42,6 +42,7 @@
 #define MAP_PIN_CACHE              "/sys/fs/bpf/firewall/flow_cache_map"
 #define MAP_PIN_STATS              "/sys/fs/bpf/firewall/stats_map"
 #define MAP_PIN_EVENTS             "/sys/fs/bpf/firewall/events_ringbuf"
+#define MAP_PIN_PERF               "/sys/fs/bpf/firewall/perf_map"
 
 /* L1 Per-CPU Fast Flow Cache Limits */
 #define FLOW_CACHE_ENTRIES         4096

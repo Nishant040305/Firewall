@@ -31,6 +31,13 @@ struct pkt_ctx {
             __u16 dst_port;
         };
     };
+
+    /* Execution timing analysis for every packet (nanoseconds) */
+    __u32 time_extract_ns;
+    __u32 time_hash_ns;
+    __u32 time_lookup_ns;
+    __u32 time_update_ns;
+    __u32 time_total_ns;
 };
 
 /* Initialize packet context from raw XDP metadata (Ingress only) */
@@ -47,6 +54,11 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->flow.pad[0] = 0;
     pctx->flow.pad[1] = 0;
     pctx->flow.pad[2] = 0;
+    pctx->time_extract_ns = 0;
+    pctx->time_hash_ns = 0;
+    pctx->time_lookup_ns = 0;
+    pctx->time_update_ns = 0;
+    pctx->time_total_ns = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
@@ -74,6 +86,11 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->flow.pad[0] = 0;
     pctx->flow.pad[1] = 0;
     pctx->flow.pad[2] = 0;
+    pctx->time_extract_ns = 0;
+    pctx->time_hash_ns = 0;
+    pctx->time_lookup_ns = 0;
+    pctx->time_update_ns = 0;
+    pctx->time_total_ns = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
