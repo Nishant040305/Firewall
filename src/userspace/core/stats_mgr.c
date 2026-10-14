@@ -41,7 +41,8 @@ int stats_mgr_show(int map_fd, int json_format)
         printf("  \"connections_new\": %llu,\n", (unsigned long long)totals[STAT_CONN_NEW]);
         printf("  \"connections_established\": %llu,\n", (unsigned long long)totals[STAT_CONN_ESTABLISHED]);
         printf("  \"connections_closed\": %llu,\n", (unsigned long long)totals[STAT_CONN_CLOSED]);
-        printf("  \"connections_timeout\": %llu\n", (unsigned long long)totals[STAT_CONN_TIMEOUT]);
+        printf("  \"connections_timeout\": %llu,\n", (unsigned long long)totals[STAT_CONN_TIMEOUT]);
+        printf("  \"events_lost\": %llu\n", (unsigned long long)totals[STAT_EVENTS_LOST]);
         printf("}\n");
         return 0;
     }
@@ -56,6 +57,7 @@ int stats_mgr_show(int map_fd, int json_format)
            (unsigned long long)totals[STAT_EGRESS_PACKETS]);
     printf("    - Allowed (Passed):     %llu\n", (unsigned long long)totals[STAT_ALLOWED_PACKETS]);
     printf("    - Dropped (Blocked):    %llu\n", (unsigned long long)totals[STAT_DROPPED_PACKETS]);
+    printf("    - Ring buffer lost:     %llu\n", (unsigned long long)totals[STAT_EVENTS_LOST]);
     printf("\n  [ PROTOCOL BREAKDOWN ]\n");
     printf("    - TCP:                  %llu\n", (unsigned long long)totals[STAT_TCP_PACKETS]);
     printf("    - UDP:                  %llu\n", (unsigned long long)totals[STAT_UDP_PACKETS]);

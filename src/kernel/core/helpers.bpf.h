@@ -66,8 +66,10 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
     struct packet_event *evt;
 
     evt = bpf_ringbuf_reserve(&events_ringbuf, sizeof(*evt), 0);
-    if (!evt)
+    if (!evt) {
+        inc_stat(STAT_EVENTS_LOST);
         return;
+    }
 
     evt->timestamp_ns = bpf_ktime_get_ns();
     evt->src_ip = pkt->src_ip;
@@ -81,9 +83,10 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
     evt->rule_id = pkt->rule_id;
     evt->pkt_len = pkt->pkt_len;
     evt->tcp_flags = pkt->tcp_flags;
-    evt->pad[0] = 0;
-    evt->pad[1] = 0;
-    evt->pad[2] = 0;
+    evt->reason = pkt->reason;
+    evt->new_flow = pkt->new_flow;
+    evt->pad = 0;
+    evt->ifindex = pkt->ifindex;
 
     bpf_ringbuf_submit(evt, 0);
 }

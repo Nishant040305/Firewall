@@ -30,15 +30,18 @@ USER_SRCS = src/userspace/main.c \
             src/userspace/protocols/proto_tcp.c \
             src/userspace/protocols/proto_udp.c \
             src/userspace/protocols/proto_icmp.c \
-            src/userspace/telemetry/event_bus.c
+            src/userspace/telemetry/event_bus.c \
+            src/userspace/telemetry/network_log.c
 
 USER_OBJS = $(patsubst src/userspace/%.c,$(BUILD_DIR)/%.o,$(USER_SRCS))
+USER_DEPS = $(shell find include/ src/userspace/ -type f -name "*.h")
+-include $(USER_OBJS:.o=.d)
 USER_BIN = $(BUILD_DIR)/fw-ctl
 CTL_ALIAS = $(BUILD_DIR)/firewallctl
 
 .DEFAULT_GOAL := all
 
-.PHONY: all bpf userspace clean
+.PHONY: all bpf userspace clean test-logging
 
 BPF_PASS_SRC = src/kernel/xdp_pass.bpf.c
 BPF_PASS_OBJ = $(BUILD_DIR)/xdp_pass.bpf.o
@@ -66,9 +69,9 @@ $(BPF_ZERO_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
 
 userspace: $(USER_BIN)
 
-$(BUILD_DIR)/%.o: src/userspace/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: src/userspace/%.c $(USER_DEPS) | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 $(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
@@ -76,3 +79,8 @@ $(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+test-logging: | $(BUILD_DIR)
+	$(CC) $(CFLAGS) test/network_log_test.c src/userspace/telemetry/network_log.c src/userspace/core/config.c -o $(BUILD_DIR)/network-log-test
+	./$(BUILD_DIR)/network-log-test
+	python3 test/test_network_logs.py

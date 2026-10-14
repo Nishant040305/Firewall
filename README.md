@@ -84,11 +84,22 @@ sudo ./build/firewallctl stats show
 
 # Export statistics as JSON
 sudo ./build/firewallctl stats show --json
+
+# View quiet, aggregated network evidence (not attack alerts)
+sudo python3 scripts/network_logs.py --follow --direction out
+
+# Summarize traffic without ephemeral-port noise
+sudo python3 scripts/network_logs.py --summary
 ```
 
 ---
 
 ## 🧪 Testing & Validation (Steps 12, 14, 15)
+
+Network logging setup, filtering, retention and coverage limits are documented in
+[Network Visibility](docs/NETWORK_VISIBILITY.md). Run `make test-logging` for its
+unprivileged tests. Deploy matching new BPF/userspace builds together; restart is
+required for the updated telemetry/map layout.
 
 ### Run the Step 14 Automated Test Suite
 ```bash

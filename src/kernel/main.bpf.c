@@ -50,6 +50,11 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     /* 2. L3: IPv4 Parsing */
     if (parse_ipv4(pkt) < 0) {
         inc_stat(STAT_DROPPED_MALFORMED);
+        pkt->action = ACTION_DROP;
+        pkt->reason = REASON_MALFORMED;
+#ifndef MINIMAL_OBSERVABILITY
+        emit_packet_event(pkt);
+#endif
         return ACTION_DROP;
     }
 
@@ -61,6 +66,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     case IPPROTO_TCP:
         if (parse_tcp(pkt) < 0) {
             inc_stat(STAT_DROPPED_MALFORMED);
+            pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
             now = bpf_ktime_get_ns();
@@ -70,6 +76,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     case IPPROTO_UDP:
         if (parse_udp(pkt) < 0) {
             inc_stat(STAT_DROPPED_MALFORMED);
+            pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
             now = bpf_ktime_get_ns();
@@ -79,6 +86,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     case IPPROTO_ICMP:
         if (parse_icmp(pkt) < 0) {
             inc_stat(STAT_DROPPED_MALFORMED);
+            pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
             now = bpf_ktime_get_ns();
@@ -115,9 +123,10 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         inc_stat(STAT_DROPPED_PACKETS);
     }
 
+    pkt->action = decision;
 #ifndef MINIMAL_OBSERVABILITY
     /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
-    if (decision == ACTION_DROP ||
+    if (decision == ACTION_DROP || pkt->new_flow ||
         pkt->conn_state == CONN_STATE_SYN_SENT ||
         pkt->conn_state == CONN_STATE_SYN_RECV ||
         pkt->conn_state == CONN_STATE_CLOSED ||

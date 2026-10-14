@@ -14,6 +14,7 @@ struct firewall_ctx {
     struct bpf_loader_ctx loader;
     struct event_bus bus;
     volatile sig_atomic_t running;
+    volatile sig_atomic_t reload_requested;
 };
 
 /* Initialize all firewall subsystems */

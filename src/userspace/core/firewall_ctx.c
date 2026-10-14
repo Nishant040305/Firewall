@@ -4,6 +4,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 #include "firewall_ctx.h"
 #include "rules_mgr.h"
 #include "conntrack_mgr.h"
@@ -120,8 +121,10 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     }
 
     /* 7. Initialize Event Bus for Real-time 5-tuple Telemetry */
-    if (event_bus_init(&ctx->bus, ctx->loader.events_ringbuf_fd, ctx->loader.stats_map_fd) < 0) {
-        fprintf(stderr, "[-] Warning: Failed to initialize EventBus\n");
+    if (event_bus_init(&ctx->bus, ctx->loader.events_ringbuf_fd, ctx->loader.stats_map_fd, &ctx->config) < 0) {
+        fprintf(stderr, "[-] Visibility initialization failed; detaching firewall\n");
+        bpf_loader_cleanup(&ctx->loader);
+        return -1;
     }
 
     return 0;
@@ -138,18 +141,29 @@ int firewall_ctx_run(struct firewall_ctx *ctx)
            ctx->config.interface,
            direction_to_str(ctx->config.direction),
            mode_to_str(ctx->loader.mode));
-    printf("[*] Real-time 5-tuple telemetry streaming active. Press Ctrl+C to stop.\n\n");
+    printf("[*] Network evidence: %s (aggregated, not attack alerts). Press Ctrl+C to stop.\n\n",
+           ctx->config.telemetry.path);
 
-    time_t last_stats = time(NULL);
+    struct timespec tick;
+    clock_gettime(CLOCK_MONOTONIC, &tick);
+    time_t last_flush = tick.tv_sec;
     while (ctx->running) {
-        /* Poll and print 5-tuple events from RingBuffer */
-        event_bus_poll(&ctx->bus, ctx->config.global.ringbuf_poll_timeout_ms);
+        if (ctx->reload_requested) {
+            ctx->reload_requested = 0;
+            firewall_ctx_reload(ctx);
+        }
+        /* Poll and aggregate metadata events from RingBuffer. */
+        int rc = event_bus_poll(&ctx->bus, ctx->config.global.ringbuf_poll_timeout_ms);
+        if (rc < 0 && rc != -EINTR) {
+            fprintf(stderr, "[-] Network event polling failed\n");
+            return 1;
+        }
 
-        /* Periodic stats printing */
-        time_t now = time(NULL);
-        if (now - last_stats >= ctx->config.global.stats_interval_sec) {
-            stats_mgr_show(ctx->loader.stats_map_fd, 0);
-            last_stats = now;
+        /* Quiet periodic evidence and logging-health flush. */
+        clock_gettime(CLOCK_MONOTONIC, &tick);
+        if (tick.tv_sec - last_flush >= ctx->bus.log.window_sec) {
+            event_bus_flush(&ctx->bus);
+            last_flush = tick.tv_sec;
         }
     }
 
@@ -161,7 +175,17 @@ void firewall_ctx_reload(struct firewall_ctx *ctx)
     printf("\n[*] SIGHUP received: Reloading configuration and rules...\n");
     const char *cfg_file = ctx->opts.config_path ? ctx->opts.config_path : "config/firewall.yaml";
     if (access(cfg_file, F_OK) == 0) {
-        config_load_file(cfg_file, &ctx->config);
+        struct firewall_config candidate = ctx->config;
+        if (config_load_file(cfg_file, &candidate) < 0 || config_validate(&candidate) < 0) {
+            fprintf(stderr, "[-] Invalid reload; keeping current configuration\n");
+            return;
+        }
+        /* Hook and log destination changes require restart. */
+        ctx->config.global = candidate.global;
+        ctx->config.telemetry.aggregate_window_sec = candidate.telemetry.aggregate_window_sec;
+        ctx->bus.log.window_sec = candidate.telemetry.aggregate_window_sec;
+        ctx->bus.log.max_bytes = (size_t)candidate.telemetry.max_file_mb * 1024 * 1024;
+        ctx->bus.log.console = candidate.telemetry.console_events;
     }
     const char *rules_file = ctx->opts.rules_path ? ctx->opts.rules_path : "config/rules.yaml";
     if (access(rules_file, F_OK) == 0 && ctx->loader.rules_map_fd >= 0) {

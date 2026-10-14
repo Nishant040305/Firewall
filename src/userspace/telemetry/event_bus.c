@@ -4,42 +4,61 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "event_bus.h"
-#include "../protocols/protocol_registry.h"
-#include "../utils/ip_utils.h"
 
 static int ringbuf_sample_handler(void *ctx, void *data, size_t data_sz)
 {
-    const struct packet_event *evt = (const struct packet_event *)data;
-    char buf[256];
-    const struct protocol_adapter *adapter = protocol_registry_get(evt->proto);
-    if (adapter && adapter->format_event) {
-        adapter->format_event(evt, buf, sizeof(buf));
-        printf("%s\n", buf);
-    } else {
-        char src[32], dst[32];
-        ip_to_str(evt->src_ip, src, sizeof(src));
-        ip_to_str(evt->dst_ip, dst, sizeof(dst));
-        const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
-                              (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
-        printf("[PACKET] %s | Proto %u | %s -> %s (%u bytes)\n", dir_str, evt->proto, src, dst, evt->pkt_len);
+    struct event_bus *bus = ctx;
+    if (data_sz != sizeof(struct packet_event)) {
+        bus->log.invalid++;
+        return 0;
     }
+    network_log_record(&bus->log, data);
     return 0;
 }
 
-int event_bus_init(struct event_bus *bus, int ringbuf_fd, int stats_map_fd)
+int event_bus_init(struct event_bus *bus, int ringbuf_fd, int stats_map_fd,
+                   const struct firewall_config *cfg)
 {
     memset(bus, 0, sizeof(*bus));
     bus->stats_map_fd = stats_map_fd;
+    if (network_log_init(&bus->log, cfg->telemetry.path,
+        cfg->telemetry.aggregate_window_sec, (size_t)cfg->telemetry.max_file_mb * 1024 * 1024,
+        cfg->telemetry.console_events) < 0) {
+        fprintf(stderr, "[-] Cannot open private network log '%s'\n", cfg->telemetry.path);
+        return -1;
+    }
 
     if (ringbuf_fd >= 0) {
         bus->rb = ring_buffer__new(ringbuf_fd, ringbuf_sample_handler, bus, NULL);
         if (!bus->rb) {
             fprintf(stderr, "[-] Failed to initialize BPF RingBuffer in EventBus\n");
+            network_log_close(&bus->log);
             return -1;
         }
     }
 
+    if (!bus->rb) {
+        network_log_close(&bus->log);
+        return -1;
+    }
     return 0;
+}
+
+void event_bus_flush(struct event_bus *bus)
+{
+    network_log_flush(&bus->log);
+    int ncpus = libbpf_num_possible_cpus();
+    __u64 lost = 0;
+    int available = 0;
+    if (ncpus > 0) {
+        __u64 values[ncpus];
+        __u32 key = STAT_EVENTS_LOST;
+        if (bus->stats_map_fd >= 0 && bpf_map_lookup_elem(bus->stats_map_fd, &key, values) == 0) {
+            available = 1;
+            for (int i = 0; i < ncpus; i++) lost += values[i];
+        }
+    }
+    network_log_health(&bus->log, lost, available);
 }
 
 int event_bus_poll(struct event_bus *bus, int timeout_ms)
@@ -80,6 +99,9 @@ void event_bus_collect_stats(struct event_bus *bus)
 
 void event_bus_cleanup(struct event_bus *bus)
 {
+    if (bus->rb) ring_buffer__consume(bus->rb);
+    event_bus_flush(bus);
+    network_log_close(&bus->log);
     if (bus->rb) {
         ring_buffer__free(bus->rb);
         bus->rb = NULL;

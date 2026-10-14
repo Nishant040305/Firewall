@@ -11,3 +11,10 @@ global:
   stats_interval_sec: 5
   ringbuf_poll_timeout_ms: 100
   default_policy: pass
+
+# Network evidence, not attack alerts. Directory must exist and be host-controlled.
+telemetry:
+  path: telemetry/network.jsonl
+  aggregate_window_sec: 30
+  max_file_mb: 20            # current file + one rotated backup (roughly 40 MB total)
+  console_events: false     # no packet-by-packet console noise

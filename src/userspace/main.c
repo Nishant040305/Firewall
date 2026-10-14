@@ -6,7 +6,7 @@ static struct firewall_ctx g_fw;
 
 static void sig_handler(int sig) {
   if (sig == SIGHUP) {
-    firewall_ctx_reload(&g_fw);
+    g_fw.reload_requested = 1;
   } else {
     g_fw.running = 0;
   }

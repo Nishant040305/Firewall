@@ -68,10 +68,12 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
         rule->hit_count += 1;
         rule->byte_count += pkt->pkt_len;
         pkt->rule_id = i + 1;
+        pkt->reason = REASON_POLICY;
         return rule->action;
     }
 
     /* Default Policy: DROP if not explicitly allowed by rule */
+    pkt->reason = REASON_DEFAULT_POLICY;
     return ACTION_DROP;
 }
 

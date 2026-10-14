@@ -19,7 +19,9 @@ struct pkt_ctx {
     __u8  tcp_flags;
     __u8  action;
     __u8  conn_state;
-    __u8  _pad;
+    __u8  reason;
+    __u8  new_flow;
+    __u32 ifindex;
     __u32 rule_id;
     void *l4_hdr;
     union {
@@ -44,6 +46,11 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
     pctx->tcp_flags = 0;
+    pctx->reason = REASON_STATE;
+    pctx->new_flow = 0;
+    pctx->proto = 0;
+    pctx->ifindex = ctx->ingress_ifindex;
+    pctx->flow = (struct flow_key){};
     pctx->flow.pad[0] = 0;
     pctx->flow.pad[1] = 0;
     pctx->flow.pad[2] = 0;
@@ -71,6 +78,11 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
     pctx->tcp_flags = 0;
+    pctx->reason = REASON_STATE;
+    pctx->new_flow = 0;
+    pctx->proto = 0;
+    pctx->ifindex = skb->ifindex;
+    pctx->flow = (struct flow_key){};
     pctx->flow.pad[0] = 0;
     pctx->flow.pad[1] = 0;
     pctx->flow.pad[2] = 0;

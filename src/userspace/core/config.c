@@ -35,6 +35,10 @@ void config_set_defaults(struct firewall_config *cfg)
     cfg->global.stats_interval_sec = 1;
     cfg->global.ringbuf_poll_timeout_ms = 100;
     cfg->global.default_policy = 1; /* PASS */
+    snprintf(cfg->telemetry.path, sizeof(cfg->telemetry.path), "telemetry/network.jsonl");
+    cfg->telemetry.aggregate_window_sec = 30;
+    cfg->telemetry.max_file_mb = 20;
+    cfg->telemetry.console_events = 0;
 }
 
 static char *trim_whitespace(char *str)
@@ -63,6 +67,8 @@ int config_load_file(const char *path, struct firewall_config *cfg)
     char current_section[32] = "";
 
     while (fgets(line, sizeof(line), f)) {
+        char *comment = strchr(line, '#');
+        if (comment) *comment = '\0';
         char *p = trim_whitespace(line);
         if (*p == '#' || *p == '\0') continue;
 
@@ -100,6 +106,15 @@ int config_load_file(const char *path, struct firewall_config *cfg)
             } else {
                 cfg->mode = ATTACH_MODE_TC;
             }
+        } else if (strcmp(current_section, "telemetry") == 0) {
+            if (strcmp(key, "path") == 0)
+                snprintf(cfg->telemetry.path, sizeof(cfg->telemetry.path), "%s", val);
+            else if (strcmp(key, "aggregate_window_sec") == 0)
+                cfg->telemetry.aggregate_window_sec = atoi(val);
+            else if (strcmp(key, "max_file_mb") == 0)
+                cfg->telemetry.max_file_mb = atoi(val);
+            else if (strcmp(key, "console_events") == 0)
+                cfg->telemetry.console_events = !strcmp(val, "true");
         } else if (strcmp(current_section, "global") == 0) {
             if (strcmp(key, "direction") == 0) {
                 if (strcasecmp(val, "in") == 0 || strcasecmp(val, "ingress") == 0) {
@@ -139,6 +154,10 @@ int config_validate(const struct firewall_config *cfg)
     if (cfg->global.stats_interval_sec <= 0) {
         return -1;
     }
+    if (cfg->global.ringbuf_poll_timeout_ms < 1 || cfg->global.ringbuf_poll_timeout_ms > 10000 ||
+        !cfg->telemetry.path[0] || cfg->telemetry.aggregate_window_sec < 1 ||
+        cfg->telemetry.aggregate_window_sec > 3600 || cfg->telemetry.max_file_mb < 1 ||
+        cfg->telemetry.max_file_mb > 1024) return -1;
     return 0;
 }
 

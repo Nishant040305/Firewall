@@ -28,6 +28,13 @@ struct firewall_config {
         int default_policy; /* 0 = DROP, 1 = PASS */
     } global;
 
+    struct {
+        char path[512];
+        int aggregate_window_sec;
+        int max_file_mb;
+        int console_events;
+    } telemetry;
+
 };
 
 /* Helper strings */

@@ -19,6 +19,7 @@ enum stat_counter {
     STAT_CONN_ESTABLISHED,
     STAT_CONN_CLOSED,
     STAT_CONN_TIMEOUT,
+    STAT_EVENTS_LOST,
     STAT_MAX_COUNTERS,
 };
 

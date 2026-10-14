@@ -105,6 +105,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
         bpf_map_update_elem(&conntrack_map, &rev_key, &rev_entry, BPF_ANY);
 
         inc_stat(STAT_CONN_NEW);
+        pkt->new_flow = 1;
         pkt->action = ACTION_PASS;
         pkt->conn_state = CONN_STATE_SYN_SENT;
         return ACTION_PASS;
@@ -124,6 +125,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
                 cached->key.proto = 0;
             }
             inc_stat(STAT_DROPPED_UNSOLICITED);
+            pkt->reason = REASON_INVALID_STATE;
             pkt->action = ACTION_DROP;
             pkt->conn_state = CONN_STATE_INVALID;
             return ACTION_DROP;
@@ -246,6 +248,7 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
 
     /* 3. Unsolicited non-SYN packet with no state in conntrack -> DROP */
     inc_stat(STAT_DROPPED_UNSOLICITED);
+    pkt->reason = REASON_INVALID_STATE;
     pkt->action = ACTION_DROP;
     pkt->conn_state = CONN_STATE_INVALID;
     return ACTION_DROP;
@@ -363,6 +366,7 @@ static __always_inline int process_udp_state(struct pkt_ctx *pkt, __u64 now)
     inc_stat(STAT_CONN_NEW);
     pkt->action = ACTION_PASS;
     pkt->conn_state = CONN_STATE_UDP_ACTIVE;
+    pkt->new_flow = 1;
     return ACTION_PASS;
 }
 
@@ -431,6 +435,7 @@ static __always_inline int process_icmp_state(struct pkt_ctx *pkt, __u64 now)
     inc_stat(STAT_CONN_NEW);
     pkt->action = ACTION_PASS;
     pkt->conn_state = CONN_STATE_ICMP_ACTIVE;
+    pkt->new_flow = 1;
     return ACTION_PASS;
 }
 
