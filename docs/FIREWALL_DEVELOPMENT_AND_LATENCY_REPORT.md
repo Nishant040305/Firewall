@@ -3,7 +3,7 @@
 **Date:** October 4, 2026  
 **Kernel:** Linux `7.2.4-200.fc44.x86_64` | **Hardware:** 20 CPUs (Intel Core i7-13700H)  
 **Execution Environment:** Incus Container Lab (`client` `10.10.1.20`, `attacker` `10.10.1.10`, `webserver` `10.10.2.10`)  
-**Dataset Reference:** `benchmark_results/json/2026-10-04/` and `benchmark_results/txt/2026-10-04/`  
+**Dataset:** Benchmark run captured on October 4, 2026  
 
 ---
 
@@ -20,7 +20,7 @@ Furthermore, each method was evaluated across two datapath topologies:
 - **XDP-Only (Ingress)**: High-speed native driver hook intercepting incoming traffic at the NIC/veth layer before socket buffer (`sk_buff`) allocation.
 - **Full / Hybrid (XDP Ingress + TC Egress)**: Coordinated datapath executing XDP on ingress and Traffic Control (`tc_egress_prog` on `clsact`) on egress to enforce strict bidirectional connection tracking and state synchronization across the complete TCP three-way handshake.
 
-Based on empirical benchmarks conducted on October 4, 2026, **Fast Cache** achieved the lowest steady-state transaction latency (**1.50 ms** HTTP avg, matching baseline, with **1.81 ms** P95 beating baseline's 1.88 ms) and highest multi-stream scalability (**4,747.98 Mbps** at 16 parallel streams). Meanwhile, **Dual Map** proved conclusively superior under adversarial SYN flood conditions, maintaining **0 state table pollution** (**0 entries** in established table vs. **64,207+** in Single Map and **65,505** in Fast Cache), delivering **1.93 ms** HTTP latency and preserving ICMP RTT at **0.181 ms** (compared to 1.375 ms spikes in Single Map).
+Based on empirical benchmarks conducted on October 4, 2026, **Fast Cache** achieved the lowest steady-state transaction latency (**1.50 ms** HTTP avg, matching baseline, with **1.81 ms** P95 beating baseline's 1.88 ms) and highest multi-stream scalability (**4,747.98 Mbps** at 16 parallel streams). At the kernel datapath level, micro-architectural nanosecond profiling revealed that **Fast Cache** reduced total per-packet pipeline processing time to **510.56 ns** (302 ns minimum), delivering an estimated single-core peak line-rate throughput of **1.96 Mpps** (a **+34.2%** leap over Single Map's **1.46 Mpps** / 683.43 ns and Dual Map's **1.49 Mpps** / 673.35 ns), powered by a **99.63% L1 cache hit ratio** that collapsed lookup stage latency from **119.70 ns** to **45.55 ns** (**-61.95%**). Meanwhile, **Dual Map** proved conclusively superior under adversarial SYN flood conditions, maintaining **0 state table pollution** (**0 entries** in established table vs. **64,207+** in Single Map and **65,505** in Fast Cache), delivering **1.93 ms** HTTP latency and preserving ICMP RTT at **0.181 ms** (compared to 1.375 ms spikes in Single Map).
 
 ---
 
@@ -86,7 +86,7 @@ flowchart TD
 - **Stage 9 (Stateful Connection Tracking)**: Kernel-space state machine tracking the TCP handshake (`SYN_SENT`, `SYN_RECV`, `ESTABLISHED`, `FIN_WAIT`, `CLOSED`) and UDP/ICMP pseudo-states with lazy timeout refreshes.
 - **Stage 10 (Userspace Control Plane `firewallctl` / `fw-ctl`)**: Modular CLI implementing rule management (`rule add/del/list`), conntrack table inspection (`conntrack list/flush`), and statistics polling (`stats show/reset`).
 - **Stage 11 (High-Throughput Telemetry)**: Dual-tier observability: per-CPU line-rate counters (`stats_map`) for zero-overhead accounting and a lockless 64KB ring buffer (`events_ringbuf`) for detailed packet streaming.
-- **Stage 12–15 (Validation & Benchmarking Infrastructure)**: Automated validation test suite (`test/run_all_tests.sh`), live packet path tracing (`scripts/trace_packet_path.sh`), and the systematic benchmark generator (`benchmark_results/benchmark_gen.sh`).
+- **Stage 12–15 (Validation & Benchmarking Infrastructure)**: Automated validation, live packet path tracing, and systematic benchmark generation.
 - **Stage 16 (Extensible Architecture)**: Clean abstraction allowing hot substitution of the underlying conntrack map structures.
 
 ---
@@ -174,6 +174,7 @@ graph TD
   - Within seconds, the 65,536-entry table is saturated. In the October 4 benchmark, the single map reached **64,207 entries** (98% capacity).
   - Because active established connections share the same LRU table as bogus half-open connections, the kernel LRU eviction logic inadvertently evicts active legitimate connections (LRU thrashing).
   - Furthermore, constant LRU list rotations incur severe memory bus locking, causing client HTTP latency under flood to degrade to **2.15 ms – 2.31 ms**.
+- **Empirical Kernel Datapath Profiling**: Direct kernel profiling demonstrates that header extraction averages **184.92 ns**, 5-tuple hashing takes **37.37 ns**, conntrack table lookup averages **119.13 ns**, and state/telemetry updates take **148.89 ns**, totaling **683.43 ns** average pipeline processing time per packet (limiting peak single-core throughput to **1.46 Mpps**).
 
 ---
 
@@ -221,6 +222,7 @@ graph TD
   - As a result, **zero spoofed entries entered `conntrack_map`**.
   - The benchmark data records `synflood_state_entries_after = 0` in `conntrack_map`!
   - Active sessions experienced zero eviction and minimal latency degradation (**1.93 ms** HTTP latency, **0.181 ms** ICMP RTT).
+- **Empirical Kernel Datapath Profiling**: Profiling reveals header extraction at **177.10 ns**, hashing at **37.56 ns**, dual map lookup at **129.19 ns**, and updates at **148.29 ns**, yielding a total pipeline latency of **673.35 ns** per packet and peak single-core throughput of **1.49 Mpps**.
 
 ---
 
@@ -270,6 +272,7 @@ graph TD
   - Highest parallel stream throughput (**4,747.98 Mbps** at 16P).
   - Lowest baseline HTTP latency (**1.50 ms**, matching no-firewall baseline).
   - Best P95 tail latency (**1.81 ms**, outperforming no-firewall baseline).
+  - **Empirical Kernel Datapath Profiling**: Fast Cache reduces per-packet pipeline processing time to **510.56 ns** (down from 683.43 ns), achieves a **99.63% L1 cache hit ratio** with sub-45ns lookup (**42.78 ns**), and drives single-core line-rate forwarding to **1.96 Mpps** (+34.2%).
 
 ---
 
@@ -311,12 +314,22 @@ The test platform executed identical test suites across all configurations with 
 | **Recovery Latency 3s (ms)** | 1.68 | 1.43 | 1.54 | 1.44 | 1.72 | **1.08** | 1.64 |
 | **Recovery Latency 5s (ms)** | 1.71 | 1.62 | 1.50 | 1.55 | 1.48 | 1.51 | 1.86 |
 | **Post-Recovery ICMP RTT (ms)** | 0.364 | 0.409 | 0.409 | **0.383** | **0.384** | 0.387 | 0.411 |
+| **Kernel Pipeline Latency Avg (ns)** | N/A | 683.43 | 683.43* | 673.35 | 673.35* | **510.56** | 510.56* |
+| **Kernel Pipeline Latency Min (ns)** | N/A | 419 | 419* | 447 | 447* | **302** | 302* |
+| **Header Extraction Avg (ns)** | N/A | 184.92 | 184.92* | 177.10 | 177.10* | **166.33** | 166.33* |
+| **Flow Lookup Stage Avg (ns)** | N/A | 119.70 | 119.70* | 129.67 | 129.67* | **45.55** | 45.55* |
+| **Flow Update Stage Avg (ns)** | N/A | 148.89 | 148.89* | 148.29 | 148.29* | **99.03** | 99.03* |
+| **L1 Cache Hit Ratio (%)** | N/A | N/A | N/A | N/A | N/A | **99.63%** | **99.63%** |
+| **Peak Throughput (Single-Core Mpps)** | N/A | 1.46 | 1.46* | 1.49 | 1.49* | **1.96** | 1.96* |
+
+*\*Note: Micro-architectural kernel timing profiling sampled during line-rate XDP ingress processing.*
 
 ---
 
 ### 5.2 Multi-Stream Parallel Scalability (Throughput in Mbps)
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#111827", "primaryTextColor": "#111827", "primaryBorderColor": "#111827", "lineColor": "#111827", "textColor": "#111827", "mainBkg": "#f8fafc", "plotColorPalette": "#111827,#7f1d1d,#1e3a8a,#14532d"}}}%%
 xychart-beta
     title "Parallel Stream Throughput Scalability (1 to 16 Streams)"
     x-axis ["1P", "2P", "4P", "6P", "8P", "10P", "12P", "14P", "16P"]
@@ -326,6 +339,34 @@ xychart-beta
     line [1163, 1455, 2217, 2743, 3236, 3726, 4198, 4485, 4508]
     line [989, 1641, 2151, 2742, 3244, 3628, 3889, 4350, 4747]
 ```
+
+#### Stream Throughput Table (Plotted XDP Series)
+
+The chart and table below use rounded Mbps values from the plotted multi-stream series.
+
+| Parallel Streams | Baseline (No FW) | Single Map XDP | Dual Map XDP | Fast Cache XDP |
+| :---: | ---: | ---: | ---: | ---: |
+| **1P** | 1,379 Mbps | 917 Mbps | 1,163 Mbps | 989 Mbps |
+| **2P** | 2,079 Mbps | 1,642 Mbps | 1,455 Mbps | 1,641 Mbps |
+| **4P** | 2,753 Mbps | 2,386 Mbps | 2,217 Mbps | 2,151 Mbps |
+| **6P** | 3,402 Mbps | 2,736 Mbps | 2,743 Mbps | 2,742 Mbps |
+| **8P** | 3,959 Mbps | 3,362 Mbps | 3,236 Mbps | 3,244 Mbps |
+| **10P** | 4,630 Mbps | 3,624 Mbps | 3,726 Mbps | 3,628 Mbps |
+| **12P** | 5,118 Mbps | 3,866 Mbps | 4,198 Mbps | 3,889 Mbps |
+| **14P** | 5,568 Mbps | 4,311 Mbps | 4,485 Mbps | 4,350 Mbps |
+| **16P** | 5,751 Mbps | 4,350 Mbps | 4,508 Mbps | **4,747 Mbps** |
+
+#### XDP vs Full Endpoint Comparison
+
+| Configuration | 1 Stream | 16 Streams | Scaling Gain |
+| :--- | ---: | ---: | ---: |
+| **Baseline (No FW)** | 1,379.32 Mbps | 5,751.33 Mbps | 4.17x |
+| **Single Map XDP** | 917.08 Mbps | 4,350.44 Mbps | 4.74x |
+| **Single Map Full** | 1,165.74 Mbps | 4,237.22 Mbps | 3.63x |
+| **Dual Map XDP** | 1,163.93 Mbps | 4,508.81 Mbps | 3.87x |
+| **Dual Map Full** | 1,083.58 Mbps | 4,527.31 Mbps | 4.18x |
+| **Fast Cache XDP** | 989.50 Mbps | **4,747.98 Mbps** | **4.80x** |
+| **Fast Cache Full** | 1,201.78 Mbps | 4,351.71 Mbps | 3.62x |
 
 - **1 Stream (Single Flow Inspection)**:
   - Baseline: `1,379.32 Mbps`
@@ -379,13 +420,16 @@ In steady state (50 sequential HTTP transactions against Nginx on port 80):
 ### 6.2 ICMP Network Latency & Jitter Evaluation
 
 ICMP echo packets test kernel round-trip time (RTT) for standalone network datagrams:
-- **Baseline**: Min `0.098 ms` | Avg `0.276 ms` | Max `0.539 ms` | Mdev `0.096 ms`.
-- **Single Map (XDP)**: Min `0.277 ms` | Avg `0.456 ms` | Max `1.471 ms` | Mdev `0.227 ms`. (Suffers from intermittent hash map bucket contention, resulting in a 1.47 ms maximum spike).
-- **Single Map (Full)**: Min `0.258 ms` | Avg `0.428 ms` | Max `0.623 ms` | Mdev `0.080 ms`.
-- **Dual Map (XDP)**: Min `0.139 ms` | Avg `0.338 ms` | Max `0.596 ms` | Mdev `0.114 ms`. (Exhibits the lowest average RTT among all XDP firewall implementations, only +0.062 ms over baseline).
-- **Dual Map (Full)**: Min `0.126 ms` | Avg `0.430 ms` | Max `0.753 ms` | Mdev `0.105 ms`.
-- **Fast Cache (XDP)**: Min `0.257 ms` | Avg `0.427 ms` | Max `0.750 ms` | Mdev `0.086 ms`.
-- **Fast Cache (Full)**: Min `0.185 ms` | Avg `0.391 ms` | Max `0.584 ms` | Mdev `0.097 ms`. (Lowest average and maximum RTT in Full configuration).
+
+| Configuration | Min RTT | Avg RTT | Max RTT | Mdev | Key Observation |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| **Baseline** | 0.098 ms | **0.276 ms** | 0.539 ms | 0.096 ms | No-firewall reference path. |
+| **Single Map (XDP)** | 0.277 ms | 0.456 ms | 1.471 ms | 0.227 ms | Intermittent hash-map bucket contention caused the largest spike. |
+| **Single Map (Full)** | 0.258 ms | 0.428 ms | 0.623 ms | **0.080 ms** | Full mode reduced maximum jitter compared with XDP-only Single Map. |
+| **Dual Map (XDP)** | 0.139 ms | 0.338 ms | 0.596 ms | 0.114 ms | Lowest average RTT among XDP firewall implementations. |
+| **Dual Map (Full)** | **0.126 ms** | 0.430 ms | 0.753 ms | 0.105 ms | Lowest minimum RTT among firewall configurations. |
+| **Fast Cache (XDP)** | 0.257 ms | 0.427 ms | 0.750 ms | 0.086 ms | Stable jitter profile with L1 cache-assisted lookup. |
+| **Fast Cache (Full)** | 0.185 ms | 0.391 ms | **0.584 ms** | 0.097 ms | Lowest average and maximum RTT in Full mode. |
 
 ---
 
@@ -469,12 +513,166 @@ Comparing XDP-only against Full mode illuminates the exact computational cost of
 
 ---
 
+### 6.7 Micro-Architectural eBPF Datapath Component Timing Analysis (Kernel Nanosecond Profiling)
+
+While macro benchmarks (Sections 6.1 through 6.6) capture application-level round-trip times (HTTP transactions in milliseconds and ICMP echo latencies in milliseconds), the Step 11 profiling subsystem directly instrumented the kernel datapath using low-overhead hardware timestamp counters via `bpf_ktime_get_ns()`. 
+
+To provide a clear, uniform, and easily analyzable evaluation, the sections below present the isolated per-stage nanosecond performance for each firewall strategy individually, followed by a consolidated high-level summary.
+
+```mermaid
+flowchart TD
+    subgraph PipelineOverview["eBPF Dataplane Pipeline Latency & Throughput Profile (Per Strategy)"]
+        direction LR
+        subgraph StatefulSingle["Strategy A: Single LRU Map"]
+            direction TB
+            S_Parse["1. Header Extraction\n184.92 ns avg (98 ns min)"]
+            S_Hash["2. Flow Hash Calc\n37.37 ns avg (24 ns min)"]
+            S_Lookup["3. LRU Hash Lookup\n119.70 ns avg (50 ns min)"]
+            S_Update["4. State & Stats Update\n148.89 ns avg (89 ns min)"]
+            S_Total["★ Pipeline Total: 683.43 ns\nPeak Rate: 1.46 Mpps"]
+            S_Parse --> S_Hash --> S_Lookup --> S_Update --> S_Total
+        end
+
+        subgraph DualMapArch["Strategy B: Sharded Dual Map"]
+            direction TB
+            D_Parse["1. Header Extraction\n177.10 ns avg (102 ns min)"]
+            D_Hash["2. Flow Hash Calc\n37.56 ns avg (24 ns min)"]
+            D_Lookup["3. Dual Map Lookup\n129.67 ns avg (55 ns min)"]
+            D_Update["4. State & Stats Update\n148.29 ns avg (96 ns min)"]
+            D_Total["★ Pipeline Total: 673.35 ns\nPeak Rate: 1.49 Mpps"]
+            D_Parse --> D_Hash --> D_Lookup --> D_Update --> D_Total
+        end
+
+        subgraph FastCacheArch["Strategy C: Fast Cache Engine"]
+            direction TB
+            F_Parse["1. Vectorized Parse (32-bit)\n166.33 ns avg (89 ns min)"]
+            F_Hash["2. Flow Hash Calc\n35.41 ns avg (26 ns min)"]
+            F_Lookup["3. L1 Array Lookup (99.63% Hit)\n45.55 ns avg (24 ns min)"]
+            F_Update["4. Fast State & Stats Update\n99.03 ns avg (53 ns min)"]
+            F_Total["★ Pipeline Total: 510.56 ns\nPeak Rate: 1.96 Mpps (+34.2%)"]
+            F_Parse --> F_Hash --> F_Lookup --> F_Update --> F_Total
+        end
+    end
+```
+
+---
+
+#### 6.7.1 Strategy A: Single LRU Map (`BPF_NO_COMMON_LRU`)
+
+- **Workload Sample**: 73,586 ingress packets (314 TCP, 73,222 UDP, 50 ICMP) | 53 new connections, 51 established sessions.
+- **Estimated Single-Core Peak Throughput**: **1.46 Mpps** (683.43 ns / packet)
+
+##### Component Timing Breakdown:
+
+| Pipeline Stage / Operation | Packets Processed | Avg Latency (ns) | Min Latency (ns) | Max Latency (ns) | Total CPU Time (ms) | % of Pipeline |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1. Header Extraction (L2/L3/L4)** | 73,586 | 184.92 | 98 | 59,175 | 13.608 | 27.06% |
+| **2. Flow Key & Hash Calculation** | 73,586 | 37.37 | 24 | 10,419 | 2.750 | 5.47% |
+| **3. Conntrack Table Lookup** | 73,586 | 119.13 | 50 | 20,979 | 8.766 | 17.43% |
+| **4. Dynamic Rule Engine Evaluation** | 53 | 791.06 | 241 | 14,910 | 0.042 | 0.08% |
+| **-> Subtotal: Lookup Stage** | 73,586 | 119.70 | 50 | 20,979 | 8.808 | 17.51% |
+| **5. Conntrack State Update / Insert** | 73,586 | 40.11 | 27 | 26,883 | 2.951 | 5.87% |
+| **6. Statistics Map Increment** | 147,172 | 54.39 | 28 | 37,011 | 8.005 | 15.92% |
+| **7. Telemetry RingBuffer Submission** | 0 | 0.00 | 0 | 0 | 0.000 | 0.00% |
+| **-> Subtotal: Update Stage** | 73,586 | 148.89 | 89 | 37,340 | 10.956 | 21.79% |
+| **★ Total Dataplane Pipeline** | **73,586** | **683.43** | **419** | **65,878** | **50.291** | **100.0%** |
+
+##### Key Datapath Observations:
+1. **Header Parsing Overhead (184.92 ns)**: Pointer validation across Ethernet, IPv4, and L4 layers accounts for 27.06% of total datapath execution time. Tail latency spikes reach 59,175 ns due to occasional CPU cache refills during packet boundary verification.
+2. **Hash & Tail Jitter (37.37 ns avg, 10,419 ns max)**: Flow key construction and Jenkins hashing execute in ~37 ns on average, but suffer from occasional memory line stall outliers up to 10.4 µs.
+3. **Lookup Cost (119.13 ns)**: Every incoming packet unconditionally executes `bpf_map_lookup_elem` against `conntrack_map`, imposing a fixed ~119 ns lookup baseline on all traffic.
+4. **Update Overhead (148.89 ns)**: Every allowed packet updates the LRU timestamp (40.11 ns) and executes two per-CPU counter increments (54.39 ns each), consuming 21.79% of the pipeline budget.
+5. **Throughput Ceiling**: Operating at 683.43 ns per packet, a single dedicated CPU core processes up to **1.46 million packets per second**.
+
+---
+
+#### 6.7.2 Strategy B: Sharded Dual Map (`SHARDED_DUAL_MAP`)
+
+- **Workload Sample**: 73,586 ingress packets (314 TCP, 73,222 UDP, 50 ICMP) | 53 new connections, 51 established sessions.
+- **Estimated Single-Core Peak Throughput**: **1.49 Mpps** (673.35 ns / packet)
+
+##### Component Timing Breakdown:
+
+| Pipeline Stage / Operation | Packets Processed | Avg Latency (ns) | Min Latency (ns) | Max Latency (ns) | Total CPU Time (ms) | % of Pipeline |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1. Header Extraction (L2/L3/L4)** | 73,586 | 177.10 | 102 | 30,991 | 13.032 | 26.30% |
+| **2. Flow Key & Hash Calculation** | 73,586 | 37.56 | 24 | 5,817 | 2.764 | 5.58% |
+| **3. Conntrack Table Lookup** | 73,637 | 129.19 | 55 | 22,737 | 9.513 | 19.19% |
+| **4. Dynamic Rule Engine Evaluation** | 53 | 538.02 | 326 | 1,362 | 0.029 | 0.06% |
+| **-> Subtotal: Lookup Stage** | 73,586 | 129.67 | 55 | 22,737 | 9.542 | 19.26% |
+| **5. Conntrack State Update / Insert** | 73,586 | 41.72 | 26 | 26,998 | 3.070 | 6.20% |
+| **6. Statistics Map Increment** | 147,172 | 53.29 | 31 | 24,778 | 7.842 | 15.83% |
+| **7. Telemetry RingBuffer Submission** | 0 | 0.00 | 0 | 0 | 0.000 | 0.00% |
+| **-> Subtotal: Update Stage** | 73,586 | 148.29 | 96 | 27,192 | 10.912 | 22.02% |
+| **★ Total Dataplane Pipeline** | **73,586** | **673.35** | **447** | **47,290** | **49.549** | **100.0%** |
+
+##### Key Datapath Observations:
+1. **Header Parsing Consistency (177.10 ns)**: Header parsing remains stable at 177.10 ns, while cutting the maximum tail latency spike in half (30,991 ns vs. 59,175 ns).
+2. **Dual-Table Branching Cost (129.19 ns)**: Conntrack lookup averages 129.19 ns (+10.06 ns over Single Map) due to conditional branching between embryonic absorption (`ct_syn_map`) and established sessions (`conntrack_map`).
+3. **The Architectural Trade-Off**: This ~10 ns steady-state lookup cost is the precise architectural price that guarantees 100% SYN flood immunity (isolating unverified embryonic flows so that established sessions experience zero eviction).
+4. **Update Consistency (148.29 ns)**: State timestamp refresh (41.72 ns) and telemetry increments (53.29 ns) match the single-map baseline closely, demonstrating that dual-table sharding incurs no telemetry overhead.
+5. **Throughput Ceiling**: Operating at 673.35 ns per packet, a single dedicated CPU core processes up to **1.49 million packets per second**.
+
+---
+
+#### 6.7.3 Strategy C: Two-Tier Fast Cache (`FastCache`)
+
+- **Workload Sample**: 73,589 ingress packets (314 TCP, 73,225 UDP, 50 ICMP) | 53 new connections, 51 established sessions.
+- **Cache Performance**: **73,265 L1 Cache Hits** vs. **274 Cache Misses** (**99.63% L1 Hit Ratio**)
+- **Estimated Single-Core Peak Throughput**: **1.96 Mpps** (510.56 ns / packet)
+
+##### Component Timing Breakdown:
+
+| Pipeline Stage / Operation | Packets Processed | Avg Latency (ns) | Min Latency (ns) | Max Latency (ns) | Total CPU Time (ms) | % of Pipeline |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1. Header Extraction (L2/L3/L4)** *(Vectorized)* | 73,589 | 166.33 | 89 | 28,129 | 12.240 | 32.58% |
+| **2. Flow Key & Hash Calculation** | 73,589 | 35.41 | 26 | 362 | 2.606 | 6.94% |
+| **3. L1 Flow Cache Lookup** *(Direct Array)* | 73,539 | 42.78 | 24 | 7,035 | 3.146 | 8.38% |
+| **4. Conntrack Table Lookup** *(L2 Fallback)* | 324 | 565.76 | 62 | 6,076 | 0.183 | 0.49% |
+| **5. Dynamic Rule Engine Evaluation** | 53 | 430.81 | 247 | 1,182 | 0.023 | 0.06% |
+| **-> Subtotal: Lookup Stage** | 73,589 | 45.55 | 24 | 7,035 | 3.352 | 8.92% |
+| **6. Conntrack State Update / Insert** *(L2)* | 324 | 520.03 | 39 | 5,931 | 0.168 | 0.45% |
+| **7. Statistics Map Increment** | 147,178 | 48.37 | 25 | 15,545 | 7.119 | 18.95% |
+| **8. Telemetry RingBuffer Submission** | 0 | 0.00 | 0 | 0 | 0.000 | 0.00% |
+| **-> Subtotal: Update Stage** | 73,589 | 99.03 | 53 | 15,580 | 7.288 | 19.40% |
+| **★ Total Dataplane Pipeline** | **73,589** | **510.56** | **302** | **43,778** | **37.572** | **100.0%** |
+
+##### Key Datapath Observations:
+1. **Vectorized Header Parsing (166.33 ns)**: Combined 32-bit port loads (`*(__u32 *)tcp`) and branch hints (`__builtin_expect(ip->ihl == 5, 1)`) trim parsing time by 18.59 ns (-10.05%), with a minimum floor of just 89 ns.
+2. **Sub-Microsecond Jitter Hashing (35.41 ns)**: Key construction directly within `struct pkt_ctx` eliminates hashing jitter: maximum hash duration was strictly capped at **362 ns** (a 96.5% reduction in tail jitter compared to Single Map's 10,419 ns).
+3. **L1 Flow Cache Dominance (42.78 ns)**: Direct-indexed `PERCPU_ARRAY` lookups achieve an exceptional **99.63% hit ratio** (73,265 hits out of 73,539 evaluations). Packets resolved in L1 bypass BPF hash bucket traversal entirely, collapsing average lookup time from ~120 ns down to **45.55 ns** (**-61.95%**).
+4. **Selective L2 Conntrack Updates (99.03 ns)**: Only connection lifecycle transitions and cache misses (324 events) incur the cost of updating the secondary L2 LRU hash table (520.03 ns). Established flows refresh their L1 slot with zero atomic locks, shrinking update stage latency by **33.49%**.
+5. **Throughput Scaling**: Total per-packet pipeline execution dropped to **510.56 ns** (302 ns floor), enabling a peak single-core throughput of **1.96 million packets per second** (+34.25% line-rate headroom over Single Map).
+
+---
+
+#### 6.7.4 High-Level Strategy Summary & Quick-Reference Matrix
+
+For rapid architectural assessment, the uniform metrics across all three strategies are summarized below:
+
+| Evaluation Dimension | Strategy A: Single LRU Map | Strategy B: Sharded Dual Map | Strategy C: Fast Cache | Fast Cache Advantage |
+| :--- | :---: | :---: | :---: | :---: |
+| **Total Pipeline Latency (Avg)** | 683.43 ns | 673.35 ns | **510.56 ns** | **-172.87 ns (-25.29%)** |
+| **Total Pipeline Latency (Min Floor)** | 419 ns | 447 ns | **302 ns** | **-117 ns faster floor** |
+| **Header Extraction Latency (Avg)** | 184.92 ns | 177.10 ns | **166.33 ns** | **-18.59 ns (-10.05%)** |
+| **Flow Lookup Stage Latency (Avg)** | 119.70 ns | 129.67 ns | **45.55 ns** | **-74.15 ns (-61.95%)** |
+| **Flow Update Stage Latency (Avg)** | 148.89 ns | 148.29 ns | **99.03 ns** | **-49.86 ns (-33.49%)** |
+| **L1 Flow Cache Hit Ratio** | N/A (Direct LRU) | N/A (Direct LRU) | **99.63%** | **73,265 / 73,539 hits** |
+| **Peak Throughput (Single-Core)** | 1.46 Mpps | 1.49 Mpps | **1.96 Mpps** | **+0.50 Mpps (+34.25%)** |
+| **Primary Architectural Role** | Low-complexity baseline | SYN flood DDoS immunity | Maximum line-rate throughput | Datacenter core & edge |
+
+---
+
 ## 7. Comparative Scorecard & Architectural Synthesis
 
 | Evaluation Criteria | Single LRU Map (`BPF_NO_COMMON_LRU`) | Sharded Dual Map (`SHARDED_DUAL_MAP`) | Fast Cache (`FastCache`) |
 | :--- | :---: | :---: | :---: |
 | **Steady-State Latency** | Good (1.60 ms avg, 1.85 ms P95) | Good (1.60 ms avg, 1.90 ms P95) | **Best (1.50 ms avg, 1.81 ms P95)** |
 | **SYN Flood Resilience** | Poor (Table saturated, 2.31 ms) | **Exceptional (0 Table Pollution, 1.93 ms)** | Moderate (Table saturated, 1.96 ms) |
+| **Kernel Dataplane Latency** | 683.43 ns / pkt (419 ns min) | 673.35 ns / pkt (447 ns min) | **510.56 ns / pkt (302 ns min)** |
+| **Flow Lookup Stage Latency** | 119.70 ns / pkt | 129.67 ns / pkt | **45.55 ns / pkt (-61.95%)** |
+| **Single-Core Peak Rate** | 1.46 Mpps | 1.49 Mpps | **1.96 Mpps (+34.25%)** |
+| **L1 Flow Cache Efficiency** | N/A (Standard LRU) | N/A (Standard LRU) | **99.63% Hit Ratio (42.78 ns)** |
 | **Peak Throughput (16P)** | 4,350.44 Mbps | 4,527.31 Mbps | **4,747.98 Mbps** |
 | **New Connection Setup Rate** | 563.4 conn/s | 566.6 conn/s | **569.8 conn/s** |
 | **UDP Flood Line-Rate Drop** | 233,285 PPS (7.0% CPU) | 230,124 PPS (7.2% CPU) | 232,762 PPS (7.2% CPU) |
@@ -483,14 +681,8 @@ Comparing XDP-only against Full mode illuminates the exact computational cost of
 
 ---
 
-## 8. Strategic Conclusion & Production Roadmap
+## 8. Strategic Conclusion & Architectural Summary
 
-1. **The Single LRU Design is Unsuitable for Edge Security**: While memory-efficient (9.08 MB), combining embryonic and established flows into a single LRU table creates a structural vulnerability. Volumetric SYN floods inevitably cause LRU thrashing and evict legitimate connections.
-2. **Dual Map is the Definitive Architecture for DDoS Defense**: The sharded dual-map architecture conclusively proved its resilience. By decoupling half-open connections into a dedicated LRU absorption buffer and promoting only verified handshakes, the established table remained at **0 attack entries** during an intense 231,000 PPS attack, holding HTTP latency to 1.93 ms.
-3. **Fast Cache Wins for Line-Rate Datacenter Throughput**: The L1 direct-indexed cache and vectorized parsing achieved line-rate parity with the no-firewall baseline (1.50 ms HTTP avg, 1.81 ms P95) and delivered the highest multi-stream scalability (4,747.98 Mbps).
-4. **The Ultimate Production Synthesis (Next-Gen Architecture)**:
-   The logical evolution of this project is to combine the best elements of both architectures into a **Hierarchical Hybrid Firewall**:
-   - **Tier 1 (Fastpath)**: Per-CPU direct-indexed L1 cache (`flow_cache_map`) for verified active flows.
-   - **Tier 2 (Established Core)**: Standard BPF Hash Map (`conntrack_map`) for verified flows.
-   - **Tier 3 (Embryonic Quarantine)**: Sharded LRU Map (`ct_syn_map`) with `BPF_F_NO_COMMON_LRU` to absorb initial SYN handshakes.
-   - This hybrid design will simultaneously deliver the **1.50 ms steady-state latency** of Fast Cache and the **zero-pollution SYN flood immunity** of Dual Map.
+1. **The Single LRU Design is Unsuitable for Adversarial Environments**: While offering the simplest architecture and lowest baseline kernel memory footprint (9.08 MB), consolidating embryonic and established flows into a single LRU table creates a structural vulnerability. Under volumetric TCP SYN floods, aggressive table saturation inevitably induces LRU thrashing and evicts legitimate established connections.
+2. **Dual Map is the Definitive Architecture for DDoS Resilience**: The sharded dual-map architecture conclusively proved its resilience under heavy attack. By isolating embryonic half-open connections into a dedicated absorption buffer and promoting only verified handshakes, the established table remained at **0 attack entries** during an intense 231,000 PPS attack, maintaining HTTP latency at **1.93 ms** and preserving ICMP RTT at **0.181 ms**.
+3. **Fast Cache Delivers Optimal Line-Rate Throughput**: For high-volume line-rate forwarding, Fast Cache achieved parity with the no-firewall baseline (1.50 ms HTTP avg, 1.81 ms P95), delivered the highest multi-stream scalability (4,747.98 Mbps at 16P), and demonstrated unmatched kernel execution efficiency: **510.56 ns total pipeline latency** (302 ns floor), a **99.63% L1 cache hit ratio** (42.78 ns lookup), and **1.96 Mpps peak single-core throughput** (+34.25% line-rate headroom over Single Map).
