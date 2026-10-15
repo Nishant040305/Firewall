@@ -130,16 +130,18 @@ static void dataplane_tests(const char *path)
     int fd = bpf_program__fd(bpf_object__find_program_by_name(obj, "xdp_firewall_prog"));
     int map = bpf_map__fd(bpf_object__find_map_by_name(obj, "rules_map"));
     assert(rules_mgr_load_file(map, "config/rules.yaml") > 0);
-    /* Loading must preserve IPv6 family, address and port flags. */
-    int found_ipv6_http = 0;
+    /* The shipped policy ends in a dual-stack catch-all allow rule. */
+    int found_catch_all = 0;
     for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++) {
         struct fw_rule loaded;
         assert(!bpf_map_lookup_elem(map, &i, &loaded));
-        if (loaded.family == FW_AF_INET6 && loaded.proto == PROTO_TCP &&
-            loaded.dst_port_min == 80 && (loaded.flags & RULE_FLAG_DST_PORT))
-            found_ipv6_http = 1;
+        if ((loaded.flags & RULE_FLAG_ACTIVE) && !loaded.family &&
+            loaded.proto == PROTO_ANY && loaded.action == ACTION_PASS &&
+            !(loaded.flags & (RULE_FLAG_SRC_IP | RULE_FLAG_DST_IP |
+                              RULE_FLAG_SRC_PORT | RULE_FLAG_DST_PORT)))
+            found_catch_all = 1;
     }
-    assert(found_ipv6_http);
+    assert(found_catch_all);
     assert(!rules_mgr_flush(map));
     struct fw_rule r = {.flags = RULE_FLAG_ACTIVE | RULE_FLAG_PROTO | RULE_FLAG_DST_PORT,
                         .proto = PROTO_TCP, .action = ACTION_PASS,

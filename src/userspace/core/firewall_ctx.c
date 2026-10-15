@@ -130,20 +130,19 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     
     config_dump(&ctx->config);
 
-    /* 5. Load BPF Object & Attach Hook (XDP / TC) */
+    /* 5. Load BPF object without attaching hooks. */
     const char *bpf_obj = getenv("BPF_OBJ") ? getenv("BPF_OBJ") : FW_DEFAULT_BPF_OBJ;
     printf("[*] Loading eBPF object: %s\n", bpf_obj);
     if (bpf_loader_init(&ctx->loader, bpf_obj, &ctx->config) < 0) {
         return -1;
     }
 
-    /* 6. Load Initial Rules from config/rules.yaml if present (Step 8) */
+    /* 6. Require and verify a nonempty policy before exposing any hook. */
     const char *rules_file = ctx->opts.rules_path ? ctx->opts.rules_path : "config/rules.yaml";
-    if (access(rules_file, F_OK) == 0 && ctx->loader.rules_map_fd >= 0) {
-        if (rules_mgr_load_file(ctx->loader.rules_map_fd, rules_file) < 0) {
-            bpf_loader_cleanup(&ctx->loader);
-            return -1;
-        }
+    if (rules_mgr_replace_file(ctx->loader.rules_map_fd, rules_file) < 0) {
+        fprintf(stderr, "[-] Policy initialization failed; no firewall hooks attached\n");
+        bpf_loader_cleanup(&ctx->loader);
+        return -1;
     }
 
     /* 7. Initialize Event Bus for Real-time 5-tuple Telemetry */
@@ -155,6 +154,13 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     }
 #endif
 
+    if (bpf_loader_attach(&ctx->loader) < 0) {
+#ifndef MINIMAL_OBSERVABILITY
+        event_bus_cleanup(&ctx->bus);
+#endif
+        bpf_loader_cleanup(&ctx->loader);
+        return -1;
+    }
     return 0;
 }
 
@@ -244,9 +250,9 @@ void firewall_ctx_reload(struct firewall_ctx *ctx)
 #endif
     }
     const char *rules_file = ctx->opts.rules_path ? ctx->opts.rules_path : "config/rules.yaml";
-    if (access(rules_file, F_OK) == 0 && ctx->loader.rules_map_fd >= 0) {
-        rules_mgr_flush(ctx->loader.rules_map_fd);
-        rules_mgr_load_file(ctx->loader.rules_map_fd, rules_file);
+    if (rules_mgr_replace_file(ctx->loader.rules_map_fd, rules_file) < 0) {
+        fprintf(stderr, "[-] Rule reload failed; see policy restoration diagnostics\n");
+        return;
     }
     printf("[+] Configuration reload complete.\n");
 }

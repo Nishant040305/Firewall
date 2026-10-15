@@ -233,7 +233,26 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
         return -1;
     }
 
-    /* Attach to each specified interface according to chosen mode */
+    /* Retrieve Map FDs before policy initialization and attachment. */
+    ctx->stats_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "stats_map");
+    ctx->events_ringbuf_fd = bpf_object__find_map_fd_by_name(ctx->obj, "events_ringbuf");
+    ctx->rules_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "rules_map");
+    ctx->conntrack_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "conntrack_map");
+    ctx->flow_cache_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "flow_cache_map");
+    ctx->syn_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "ct_syn_map");
+    ctx->perf_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "perf_map");
+    if (ctx->rules_map_fd < 0) {
+        fprintf(stderr, "[-] Required rules_map missing; refusing attachment\n");
+        bpf_loader_cleanup(ctx);
+        return -1;
+    }
+    return 0;
+}
+
+int bpf_loader_attach(struct bpf_loader_ctx *ctx)
+{
+    if (!ctx->obj || ctx->rules_map_fd < 0) return -1;
+    /* Attach only after the caller has initialized and verified policy. */
     for (int i = 0; i < ctx->num_ifaces; i++) {
         struct iface_hook *ih = &ctx->ifaces[i];
 
@@ -273,15 +292,6 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
             }
         }
     }
-
-    /* Retrieve Map FDs */
-    ctx->stats_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "stats_map");
-    ctx->events_ringbuf_fd = bpf_object__find_map_fd_by_name(ctx->obj, "events_ringbuf");
-    ctx->rules_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "rules_map");
-    ctx->conntrack_map_fd  = bpf_object__find_map_fd_by_name(ctx->obj, "conntrack_map");
-    ctx->flow_cache_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "flow_cache_map");
-    ctx->syn_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "ct_syn_map");
-    ctx->perf_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "perf_map");
 
     return 0;
 }

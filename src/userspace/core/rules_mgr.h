@@ -10,5 +10,7 @@ int rules_mgr_del(int map_fd, __u32 index);
 int rules_mgr_list(int map_fd);
 int rules_mgr_flush(int map_fd);
 int rules_mgr_load_file(int map_fd, const char *filepath);
+/* Parse a complete nonempty policy before changing the map; verify readback. */
+int rules_mgr_replace_file(int map_fd, const char *filepath);
 
 #endif /* __CORE_RULES_MGR_H__ */

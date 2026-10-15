@@ -127,9 +127,9 @@ static char *trim(char *s) {
     return s;
 }
 
-int rules_mgr_load_file(int map_fd, const char *filepath)
+static int parse_rules_file(const char *filepath, struct fw_rule *rules)
 {
-    if (map_fd < 0 || !filepath) return -1;
+    if (!filepath) return -1;
 
     FILE *f = fopen(filepath, "r");
     if (!f) {
@@ -144,13 +144,15 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
     int rules_loaded = 0;
 
     while (fgets(line, sizeof(line), f)) {
+        /* Never interpret a truncated YAML line as a different rule. */
+        if (!strchr(line, '\n') && !feof(f)) goto invalid;
         char *p = trim(line);
         if (*p == '#' || *p == '\0') continue;
 
         if (strncmp(p, "- rule:", 7) == 0 || strncmp(p, "- name:", 7) == 0) {
             if (in_rule && (current_rule.flags & RULE_FLAG_ACTIVE)) {
-                if (rules_mgr_add(map_fd, &current_rule, NULL)) goto invalid;
-                rules_loaded++;
+                if (rules_loaded >= MAX_RULE_ENTRIES) goto invalid;
+                rules[rules_loaded++] = current_rule;
                 memset(&current_rule, 0, sizeof(current_rule));
             }
             in_rule = 1;
@@ -164,7 +166,7 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
         }
 
         char *colon = strchr(p, ':');
-        if (!colon) continue;
+        if (!in_rule || !colon) goto invalid;
         *colon = '\0';
         char *key = trim(p);
         char *val = trim(colon + 1);
@@ -208,19 +210,65 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
             }
         } else if (strcmp(key, "desc") == 0 || strcmp(key, "description") == 0) {
             snprintf(current_rule.description, sizeof(current_rule.description), "%s", val);
-        }
+        } else goto invalid;
     }
 
     if (in_rule && (current_rule.flags & RULE_FLAG_ACTIVE)) {
-        if (rules_mgr_add(map_fd, &current_rule, NULL)) goto invalid;
-        rules_loaded++;
+        if (rules_loaded >= MAX_RULE_ENTRIES) goto invalid;
+        rules[rules_loaded++] = current_rule;
     }
 
+    if (ferror(f)) goto invalid;
     fclose(f);
-    printf("[+] Loaded %d rule(s) from '%s'.\n", rules_loaded, filepath);
     return rules_loaded;
 invalid:
-    fprintf(stderr, "[-] Invalid rule or map update failure in '%s'; %d prior rules loaded.\n", filepath, rules_loaded);
+    fprintf(stderr, "[-] Invalid rules file '%s'; policy not applied.\n", filepath);
     fclose(f);
+    return -1;
+}
+
+int rules_mgr_load_file(int map_fd, const char *filepath)
+{
+    if (map_fd < 0) return -1;
+    struct fw_rule rules[MAX_RULE_ENTRIES] = {0};
+    int count = parse_rules_file(filepath, rules);
+    if (count < 0) return -1;
+    for (int i = 0; i < count; i++)
+        if (rules_mgr_add(map_fd, &rules[i], NULL)) return -1;
+    printf("[+] Loaded %d rule(s) from '%s'.\n", count, filepath);
+    return count;
+}
+
+int rules_mgr_replace_file(int map_fd, const char *filepath)
+{
+    if (map_fd < 0) return -1;
+    struct fw_rule rules[MAX_RULE_ENTRIES] = {0};
+    struct fw_rule previous[MAX_RULE_ENTRIES];
+    int count = parse_rules_file(filepath, rules);
+    if (count <= 0) {
+        fprintf(stderr, "[-] A valid nonempty rules file is required; existing rules unchanged\n");
+        return -1;
+    }
+    for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++)
+        if (bpf_map_lookup_elem(map_fd, &i, &previous[i])) return -1;
+
+    /* Replace slots directly, never flush first. Array updates are NOT an
+     * atomic policy swap: live reload can briefly observe a mixed policy. */
+    for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++) {
+        struct fw_rule actual;
+        if (bpf_map_update_elem(map_fd, &i, &rules[i], BPF_ANY) ||
+            bpf_map_lookup_elem(map_fd, &i, &actual)) goto restore;
+        /* Traffic can increment counters between update and readback. */
+        actual.hit_count = actual.byte_count = 0;
+        if (memcmp(&actual, &rules[i], sizeof(actual))) goto restore;
+    }
+    printf("[+] Loaded and verified %d rule(s) from '%s'.\n", count, filepath);
+    return count;
+restore:
+    fprintf(stderr, "[-] Rule update/readback failed; restoring previous policy\n");
+    for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++) {
+        if (bpf_map_update_elem(map_fd, &i, &previous[i], BPF_ANY))
+            fprintf(stderr, "[-] CRITICAL: could not restore rule slot %u\n", i);
+    }
     return -1;
 }

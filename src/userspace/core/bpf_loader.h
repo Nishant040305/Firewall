@@ -59,8 +59,9 @@ struct bpf_loader_ctx {
     int maps_pinned;
 };
 
-/* Load BPF object, attach programs (TC or XDP, Ingress / Egress / Both), and fetch map FDs */
+/* Load BPF object and fetch map FDs without attaching packet filters. */
 int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const struct firewall_config *cfg);
+int bpf_loader_attach(struct bpf_loader_ctx *ctx);
 
 /* Pin maps to bpffs */
 int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx);
