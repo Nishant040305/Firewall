@@ -2,3 +2,4 @@ build/
 .vscode/
 benchmark_results/
 telemetry/
+telemetry.pre-merge-backup/
