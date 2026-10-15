@@ -1,5 +1,8 @@
 # Dual-stack firewall
 
+See [integration validation](IPV6_VALIDATION.md) on the visibility branch for
+the tested branch matrix and local branch cleanup/recovery information.
+
 IPv6 is supported by `FastCache`, `Statefull`, `SHARDED_DUAL_MAP`,
 `fastcache_time`, `statefull_time`, `dual_map_time`, and
 `feat/network-visibility`. Each branch retains its original map architecture
