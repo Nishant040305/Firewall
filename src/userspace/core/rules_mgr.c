@@ -64,19 +64,20 @@ int rules_mgr_list(int map_fd)
                 if (r.proto == PROTO_TCP) proto_str = "TCP";
                 else if (r.proto == PROTO_UDP) proto_str = "UDP";
                 else if (r.proto == PROTO_ICMP) proto_str = "ICMP";
+                else if (r.proto == PROTO_ICMPV6) proto_str = "ICMPv6";
             }
 
-            char src_buf[32] = "ANY";
+            char src_buf[INET6_ADDRSTRLEN] = "ANY";
             if (r.flags & RULE_FLAG_SRC_IP) {
-                char ip[20];
-                ip_to_str(r.src_ip, ip, sizeof(ip));
+                char ip[INET6_ADDRSTRLEN];
+                address_to_str(r.family, r.src_ip, &r.src_ip6, ip, sizeof(ip));
                 snprintf(src_buf, sizeof(src_buf), "%s", ip);
             }
 
-            char dst_buf[32] = "ANY";
+            char dst_buf[INET6_ADDRSTRLEN] = "ANY";
             if (r.flags & RULE_FLAG_DST_IP) {
-                char ip[20];
-                ip_to_str(r.dst_ip, ip, sizeof(ip));
+                char ip[INET6_ADDRSTRLEN];
+                address_to_str(r.family, r.dst_ip, &r.dst_ip6, ip, sizeof(ip));
                 snprintf(dst_buf, sizeof(dst_buf), "%s", ip);
             }
 
@@ -148,7 +149,7 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
 
         if (strncmp(p, "- rule:", 7) == 0 || strncmp(p, "- name:", 7) == 0) {
             if (in_rule && (current_rule.flags & RULE_FLAG_ACTIVE)) {
-                rules_mgr_add(map_fd, &current_rule, NULL);
+                if (rules_mgr_add(map_fd, &current_rule, NULL)) goto invalid;
                 rules_loaded++;
                 memset(&current_rule, 0, sizeof(current_rule));
             }
@@ -167,6 +168,13 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
         *colon = '\0';
         char *key = trim(p);
         char *val = trim(colon + 1);
+        /* Accept quoted YAML scalars without retaining quotes in addresses. */
+        size_t n = strlen(val);
+        if (n >= 2 && ((*val == '"' && val[n - 1] == '"') ||
+                       (*val == '\'' && val[n - 1] == '\''))) {
+            val[n - 1] = 0;
+            val++;
+        }
 
         if (strcmp(key, "action") == 0) {
             if (strcasecmp(val, "allow") == 0 || strcasecmp(val, "pass") == 0) {
@@ -179,31 +187,24 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
             if (strcasecmp(val, "tcp") == 0) current_rule.proto = PROTO_TCP;
             else if (strcasecmp(val, "udp") == 0) current_rule.proto = PROTO_UDP;
             else if (strcasecmp(val, "icmp") == 0) current_rule.proto = PROTO_ICMP;
-            else current_rule.proto = PROTO_ANY;
+            else if (strcasecmp(val, "icmpv6") == 0) current_rule.proto = PROTO_ICMPV6;
+            else if (strcasecmp(val, "any") == 0) current_rule.proto = PROTO_ANY;
+            else goto invalid;
+        } else if (strcmp(key, "family") == 0) {
+            if (rule_set_family(&current_rule, val)) goto invalid;
         } else if (strcmp(key, "src_ip") == 0 || strcmp(key, "src") == 0) {
-            if (strcmp(val, "any") != 0 && strcmp(val, "0.0.0.0/0") != 0) {
-                current_rule.flags |= RULE_FLAG_SRC_IP;
-                current_rule.src_ip = inet_addr(val);
-                current_rule.src_mask = 0xFFFFFFFF;
-            }
+            if (rule_set_address(&current_rule, val, 1)) goto invalid;
         } else if (strcmp(key, "dst_ip") == 0 || strcmp(key, "dst") == 0) {
-            if (strcmp(val, "any") != 0 && strcmp(val, "0.0.0.0/0") != 0) {
-                current_rule.flags |= RULE_FLAG_DST_IP;
-                current_rule.dst_ip = inet_addr(val);
-                current_rule.dst_mask = 0xFFFFFFFF;
-            }
+            if (rule_set_address(&current_rule, val, 0)) goto invalid;
         } else if (strcmp(key, "dport") == 0 || strcmp(key, "dst_port") == 0 || strcmp(key, "port") == 0) {
             if (strcmp(val, "any") != 0) {
                 current_rule.flags |= RULE_FLAG_DST_PORT;
-                char *dash = strchr(val, '-');
-                if (dash) {
-                    *dash = '\0';
-                    current_rule.dst_port_min = atoi(val);
-                    current_rule.dst_port_max = atoi(dash + 1);
-                } else {
-                    current_rule.dst_port_min = atoi(val);
-                    current_rule.dst_port_max = atoi(val);
-                }
+                if (parse_port_range(val, &current_rule.dst_port_min, &current_rule.dst_port_max)) goto invalid;
+            }
+        } else if (strcmp(key, "sport") == 0 || strcmp(key, "src_port") == 0) {
+            if (strcmp(val, "any")) {
+                if (parse_port_range(val, &current_rule.src_port_min, &current_rule.src_port_max)) goto invalid;
+                current_rule.flags |= RULE_FLAG_SRC_PORT;
             }
         } else if (strcmp(key, "desc") == 0 || strcmp(key, "description") == 0) {
             snprintf(current_rule.description, sizeof(current_rule.description), "%s", val);
@@ -211,11 +212,15 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
     }
 
     if (in_rule && (current_rule.flags & RULE_FLAG_ACTIVE)) {
-        rules_mgr_add(map_fd, &current_rule, NULL);
+        if (rules_mgr_add(map_fd, &current_rule, NULL)) goto invalid;
         rules_loaded++;
     }
 
     fclose(f);
     printf("[+] Loaded %d rule(s) from '%s'.\n", rules_loaded, filepath);
     return rules_loaded;
+invalid:
+    fprintf(stderr, "[-] Invalid rule or map update failure in '%s'; %d prior rules loaded.\n", filepath, rules_loaded);
+    fclose(f);
+    return -1;
 }
