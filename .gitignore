@@ -1,6 +1,6 @@
 build/
 .vscode/
 benchmark_results/
-telemetry/*.jsonl
-telemetry/*.jsonl.1
+telemetry/
+telemetry.pre-merge-backup/
 __pycache__/
