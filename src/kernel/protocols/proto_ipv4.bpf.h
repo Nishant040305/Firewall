@@ -22,6 +22,9 @@ static __always_inline int parse_ipv4(struct pkt_ctx *pkt)
     if (ip->version != 4) {
         return -1;
     }
+    /* No reassembly at XDP: reject all fragments, including first fragments. */
+    if (bpf_ntohs(ip->frag_off) & 0x3fff)
+        return -1;
 
     void *next_hdr;
     /* Fast path: IHL == 5 (No IP options - 99.9% of traffic) */
@@ -39,6 +42,11 @@ static __always_inline int parse_ipv4(struct pkt_ctx *pkt)
     }
 
     pkt->l4_hdr = next_hdr;
+    __u32 total_len = bpf_ntohs(ip->tot_len);
+    if (total_len < ip->ihl * 4 || (void *)ip + total_len > data_end)
+        return -1;
+    pkt->l3_end = (void *)ip + total_len;
+    pkt->family = FW_AF_INET;
 
     /* Populate 5-tuple L3 fields directly into context and flow key */
     pkt->src_ip = ip->saddr;

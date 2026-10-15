@@ -10,15 +10,16 @@
 static int ringbuf_sample_handler(void *ctx, void *data, size_t data_sz)
 {
     const struct packet_event *evt = (const struct packet_event *)data;
+    if (data_sz != sizeof(*evt)) return 0;
     char buf[256];
     const struct protocol_adapter *adapter = protocol_registry_get(evt->proto);
     if (adapter && adapter->format_event) {
         adapter->format_event(evt, buf, sizeof(buf));
         printf("%s\n", buf);
     } else {
-        char src[32], dst[32];
-        ip_to_str(evt->src_ip, src, sizeof(src));
-        ip_to_str(evt->dst_ip, dst, sizeof(dst));
+        char src[46], dst[46];
+        address_to_str(evt->family, evt->src_ip, &evt->src_ip6, src, sizeof(src));
+        address_to_str(evt->family, evt->dst_ip, &evt->dst_ip6, dst, sizeof(dst));
         const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                               (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
         printf("[PACKET] %s | Proto %u | %s -> %s (%u bytes) | Time(ns): ext=%u hash=%u lkp=%u upd=%u tot=%u\n",

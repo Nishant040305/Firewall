@@ -30,6 +30,8 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
         }
 
         /* Check Protocol Match */
+        if (rule->family && rule->family != pkt->family)
+            continue;
         if ((rule->flags & RULE_FLAG_PROTO) && rule->proto != PROTO_ANY) {
             if (rule->proto != pkt->proto) {
                 continue;
@@ -38,14 +40,32 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
 
         /* Check Source IP / CIDR Subnet */
         if (rule->flags & RULE_FLAG_SRC_IP) {
-            if ((pkt->src_ip & rule->src_mask) != (rule->src_ip & rule->src_mask)) {
+            int match = 1;
+            if (pkt->family == FW_AF_INET6) {
+                #pragma unroll
+                for (int w = 0; w < 4; w++)
+                    match &= (pkt->src_ip6.words[w] & rule->src_mask6.words[w]) ==
+                             (rule->src_ip6.words[w] & rule->src_mask6.words[w]);
+            } else {
+                match = (pkt->src_ip & rule->src_mask) == (rule->src_ip & rule->src_mask);
+            }
+            if (!match) {
                 continue;
             }
         }
 
         /* Check Destination IP / CIDR Subnet */
         if (rule->flags & RULE_FLAG_DST_IP) {
-            if ((pkt->dst_ip & rule->dst_mask) != (rule->dst_ip & rule->dst_mask)) {
+            int match = 1;
+            if (pkt->family == FW_AF_INET6) {
+                #pragma unroll
+                for (int w = 0; w < 4; w++)
+                    match &= (pkt->dst_ip6.words[w] & rule->dst_mask6.words[w]) ==
+                             (rule->dst_ip6.words[w] & rule->dst_mask6.words[w]);
+            } else {
+                match = (pkt->dst_ip & rule->dst_mask) == (rule->dst_ip & rule->dst_mask);
+            }
+            if (!match) {
                 continue;
             }
         }
@@ -65,8 +85,8 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
         }
 
         /* Rule Matched! Record hit stats and return action */
-        rule->hit_count += 1;
-        rule->byte_count += pkt->pkt_len;
+        __sync_fetch_and_add(&rule->hit_count, 1);
+        __sync_fetch_and_add(&rule->byte_count, pkt->pkt_len);
         pkt->rule_id = i + 1;
         return rule->action;
     }
