@@ -231,6 +231,7 @@ int populate_conntrack_entries(int map_fd, int target_count)
     for (int i = 1; i <= target_count; i++) {
         struct flow_key key = {0};
         key.src_ip = htonl((10 << 24) | (10 << 16) | (1 << 8) | (10 + (i % 200)));
+        key.family = FW_AF_INET;
         key.dst_ip = htonl((10 << 24) | (10 << 16) | (2 << 8) | 10);
         key.src_port = htons((uint16_t)(1024 + (i % 60000)));
         key.dst_port = htons(80);
@@ -362,6 +363,7 @@ void run_lookup_amount_analysis(int map_fd, int json_mode)
 
     /* Hit vs Miss comparison */
     struct flow_key miss_key = {
+        .family = FW_AF_INET,
         .src_ip = htonl(0x7F000001),
         .dst_ip = htonl(0x7F000002),
         .src_port = htons(9999),
@@ -651,6 +653,7 @@ void run_kernel_prog_test_run(const char *bpf_obj_path, int json_mode)
         /* Pre-seed established state for scenarios that need it */
         if (s == 1 || s == 2 || s == 3) {
             struct flow_key fwd_key = {
+                .family = FW_AF_INET,
                 .src_ip = client_ip,
                 .dst_ip = server_ip,
                 .src_port = htons(12345),
