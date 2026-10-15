@@ -13,6 +13,8 @@ static __always_inline int parse_ipv6(struct pkt_ctx *pkt)
     if ((void *)(ip + 1) > pkt->data_end || ip->version != 6)
         return -1;
     __u32 len = bpf_ntohs(ip->payload_len);
+    /* Older verifiers lose scalar bounds after endian conversion. */
+    asm volatile("%0 &= 65535" : "+r"(len));
     void *end = (void *)(ip + 1) + len;
     if (!len || end > pkt->data_end)
         return -1;
