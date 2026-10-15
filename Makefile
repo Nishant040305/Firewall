@@ -44,8 +44,8 @@ CTL_ALIAS = $(BUILD_DIR)/firewallctl
 .PHONY: all bpf userspace clean test-logging
 .PHONY: test-ipv6 test-ipv6-kernel
 
-$(BUILD_DIR)/ipv6-test: test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c $(USER_DEPS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c -lbpf -lelf -lz -o $@
+$(BUILD_DIR)/ipv6-test: test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c src/userspace/core/rules_mgr.c $(USER_DEPS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c src/userspace/core/rules_mgr.c -lbpf -lelf -lz -o $@
 
 test-ipv6: $(BUILD_DIR)/ipv6-test
 	./$(BUILD_DIR)/ipv6-test

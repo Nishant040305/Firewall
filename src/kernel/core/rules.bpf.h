@@ -16,8 +16,10 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
     __u16 sport = bpf_ntohs(pkt->src_port);
     __u16 dport = bpf_ntohs(pkt->dst_port);
 
-    #pragma unroll
-    for (__u32 i = 0; i < 32; i++) {
+    /* Match the userspace capacity: rules beyond slot 32 must not be ignored.
+     * A bounded loop avoids duplicating IPv6 comparisons 128 times. */
+    #pragma clang loop unroll(disable)
+    for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++) {
         __u32 key = i;
         struct fw_rule *rule = bpf_map_lookup_elem(&rules_map, &key);
         if (!rule) {
