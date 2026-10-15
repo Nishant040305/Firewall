@@ -18,6 +18,7 @@ void protocol_registry_init(void)
     registry[PROTO_TCP]  = &tcp_adapter;
     registry[PROTO_UDP]  = &udp_adapter;
     registry[PROTO_ICMP] = &icmp_adapter;
+    registry[PROTO_ICMPV6] = &icmp_adapter;
 
     initialized = 1;
 }

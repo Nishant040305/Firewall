@@ -12,6 +12,7 @@
 struct pkt_ctx {
     void *data;
     void *data_end;
+    void *l3_end;
     __u32 pkt_len;
     __u16 eth_proto;
     __u8  direction;
@@ -24,6 +25,9 @@ struct pkt_ctx {
     __u32 ifindex;
     __u32 rule_id;
     void *l4_hdr;
+    __u8 icmp_type;
+    __u8 icmp_code;
+    __u8 hop_limit;
     union {
         struct flow_key flow;
         struct {
@@ -31,6 +35,12 @@ struct pkt_ctx {
             __u32 dst_ip;
             __u16 src_port;
             __u16 dst_port;
+            __u8 flow_proto;
+            __u8 flow_pad[3];
+            struct ip6_addr src_ip6;
+            struct ip6_addr dst_ip6;
+            __u8 family;
+            __u8 family_pad[3];
         };
     };
 };

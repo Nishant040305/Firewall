@@ -40,6 +40,10 @@ struct packet_event {
     __u8  new_flow;
     __u8  pad;
     __u32 ifindex;
+    struct ip6_addr src_ip6;
+    struct ip6_addr dst_ip6;
+    __u8 family;
+    __u8 family_pad[7];
 };
 
 #endif /* __CORE_TYPES_H__ */

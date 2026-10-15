@@ -38,27 +38,29 @@ int conntrack_mgr_list(int map_fd)
     printf("----------------------------------------------------------------------------------------\n");
 
     struct flow_key key, next_key;
+    const struct flow_key *previous = NULL;
     memset(&key, 0, sizeof(key));
     int count = 0;
 
-    while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
+    while (bpf_map_get_next_key(map_fd, previous, &next_key) == 0) {
         struct flow_entry entry;
         if (bpf_map_lookup_elem(map_fd, &next_key, &entry) == 0) {
             count++;
-            char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
-            char src_str[32], dst_str[32];
-            ip_to_str(next_key.src_ip, src_ip, sizeof(src_ip));
-            ip_to_str(next_key.dst_ip, dst_ip, sizeof(dst_ip));
+            char src_ip[INET6_ADDRSTRLEN], dst_ip[INET6_ADDRSTRLEN];
+            char src_str[64], dst_str[64];
+            address_to_str(next_key.family, next_key.src_ip, &next_key.src_ip6, src_ip, sizeof(src_ip));
+            address_to_str(next_key.family, next_key.dst_ip, &next_key.dst_ip6, dst_ip, sizeof(dst_ip));
 
             __u16 sport = ntohs(next_key.src_port);
             __u16 dport = ntohs(next_key.dst_port);
 
-            snprintf(src_str, sizeof(src_str), "%s:%u", src_ip, sport);
-            snprintf(dst_str, sizeof(dst_str), "%s:%u", dst_ip, dport);
+            snprintf(src_str, sizeof(src_str), next_key.family == FW_AF_INET6 ? "[%s]:%u" : "%s:%u", src_ip, sport);
+            snprintf(dst_str, sizeof(dst_str), next_key.family == FW_AF_INET6 ? "[%s]:%u" : "%s:%u", dst_ip, dport);
 
             const char *proto_str = (next_key.proto == IPPROTO_TCP)  ? "TCP"  :
                                     (next_key.proto == IPPROTO_UDP)  ? "UDP"  :
-                                    (next_key.proto == IPPROTO_ICMP) ? "ICMP" : "OTHER";
+                                    (next_key.proto == IPPROTO_ICMP) ? "ICMP" :
+                                    (next_key.proto == IPPROTO_ICMPV6) ? "ICMPv6" : "OTHER";
 
             char pkts_str[20];
             char bytes_str[20];
@@ -71,6 +73,7 @@ int conntrack_mgr_list(int map_fd)
                    proto_str, src_str, dst_str, state_to_str(entry.state), pkts_str, bytes_str);
         }
         key = next_key;
+        previous = &key;
     }
 
     if (count == 0) {
@@ -89,10 +92,9 @@ int conntrack_mgr_flush(int map_fd, int cache_map_fd)
     memset(&key, 0, sizeof(key));
     int count = 0;
 
-    while (bpf_map_get_next_key(map_fd, &key, &next_key) == 0) {
-        bpf_map_delete_elem(map_fd, &next_key);
+    while (bpf_map_get_next_key(map_fd, NULL, &next_key) == 0) {
+        if (bpf_map_delete_elem(map_fd, &next_key)) return -1;
         count++;
-        key = next_key;
     }
 
     if (cache_map_fd >= 0) {

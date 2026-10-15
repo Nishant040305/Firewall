@@ -42,6 +42,18 @@ CTL_ALIAS = $(BUILD_DIR)/firewallctl
 .DEFAULT_GOAL := all
 
 .PHONY: all bpf userspace clean test-logging
+.PHONY: test-ipv6 test-ipv6-kernel
+
+$(BUILD_DIR)/ipv6-test: test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c $(USER_DEPS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c -lbpf -lelf -lz -o $@
+
+test-ipv6: $(BUILD_DIR)/ipv6-test
+	./$(BUILD_DIR)/ipv6-test
+
+test-ipv6-kernel: all $(BUILD_DIR)/ipv6-test
+	./$(BUILD_DIR)/ipv6-test $(BPF_OBJ)
+	./$(BUILD_DIR)/ipv6-test $(BPF_FAST_OBJ)
+	./$(BUILD_DIR)/ipv6-test $(BPF_ZERO_OBJ)
 
 BPF_PASS_SRC = src/kernel/xdp_pass.bpf.c
 BPF_PASS_OBJ = $(BUILD_DIR)/xdp_pass.bpf.o

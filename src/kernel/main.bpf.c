@@ -20,6 +20,7 @@
 
 #include "protocols/proto_eth.bpf.h"
 #include "protocols/proto_ipv4.bpf.h"
+#include "protocols/proto_ipv6.bpf.h"
 #include "protocols/proto_tcp.bpf.h"
 #include "protocols/proto_udp.bpf.h"
 #include "protocols/proto_icmp.bpf.h"
@@ -42,13 +43,13 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         return ACTION_PASS;
     }
 
-    /* Pass non-IPv4 traffic (e.g. ARP, IPv6 Neighbor Discovery) directly */
-    if (pkt->eth_proto != ETH_P_IP) {
+    /* ARP and other non-IP traffic remain outside IP policy. */
+    if (pkt->eth_proto != ETH_P_IP && pkt->eth_proto != ETH_P_IPV6) {
         return ACTION_PASS;
     }
 
     /* 2. L3: IPv4 Parsing */
-    if (parse_ipv4(pkt) < 0) {
+    if ((pkt->eth_proto == ETH_P_IPV6 ? parse_ipv6(pkt) : parse_ipv4(pkt)) < 0) {
         inc_stat(STAT_DROPPED_MALFORMED);
         pkt->action = ACTION_DROP;
         pkt->reason = REASON_MALFORMED;
@@ -84,13 +85,19 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         }
         break;
     case IPPROTO_ICMP:
+    case IPPROTO_ICMPV6:
         if (parse_icmp(pkt) < 0) {
             inc_stat(STAT_DROPPED_MALFORMED);
             pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
             now = bpf_ktime_get_ns();
-            decision = process_icmp_state(pkt, now);
+            if (valid_neighbor_discovery(pkt))
+                decision = ACTION_PASS;
+            else if (pkt->proto == IPPROTO_ICMPV6 && pkt->icmp_type != 128 && pkt->icmp_type != 129)
+                decision = evaluate_rules(pkt);
+            else
+                decision = process_icmp_state(pkt, now);
         }
         break;
     default:
@@ -111,7 +118,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         inc_stat(STAT_TCP_PACKETS);
     } else if (pkt->proto == IPPROTO_UDP) {
         inc_stat(STAT_UDP_PACKETS);
-    } else if (pkt->proto == IPPROTO_ICMP) {
+    } else if (pkt->proto == IPPROTO_ICMP || pkt->proto == IPPROTO_ICMPV6) {
         inc_stat(STAT_ICMP_PACKETS);
     } else {
         inc_stat(STAT_OTHER_PACKETS);

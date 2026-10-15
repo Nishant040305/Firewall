@@ -90,9 +90,11 @@ static void emit_entry(struct network_log *log, struct network_log_entry *entry)
 {
     if (!entry->count) return;
     const struct packet_event *e = &entry->event;
-    char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN], first[32], last[32], line[1024];
-    inet_ntop(AF_INET, &e->src_ip, src, sizeof(src));
-    inet_ntop(AF_INET, &e->dst_ip, dst, sizeof(dst));
+    char src[INET6_ADDRSTRLEN], dst[INET6_ADDRSTRLEN], first[32], last[32], line[1024];
+    inet_ntop(e->family == FW_AF_INET6 ? AF_INET6 : AF_INET,
+              e->family == FW_AF_INET6 ? (const void *)&e->src_ip6 : (const void *)&e->src_ip, src, sizeof(src));
+    inet_ntop(e->family == FW_AF_INET6 ? AF_INET6 : AF_INET,
+              e->family == FW_AF_INET6 ? (const void *)&e->dst_ip6 : (const void *)&e->dst_ip, dst, sizeof(dst));
     timestamp((long long)e->timestamp_ns + log->clock_offset_ns, first, sizeof(first));
     timestamp((long long)entry->last_ns + log->clock_offset_ns, last, sizeof(last));
     snprintf(line, sizeof(line),
@@ -115,6 +117,9 @@ static void emit_entry(struct network_log *log, struct network_log_entry *entry)
 static int same_key(const struct packet_event *a, const struct packet_event *b)
 {
     return a->src_ip == b->src_ip && a->dst_ip == b->dst_ip &&
+        a->family == b->family &&
+        !memcmp(&a->src_ip6, &b->src_ip6, sizeof(a->src_ip6)) &&
+        !memcmp(&a->dst_ip6, &b->dst_ip6, sizeof(a->dst_ip6)) &&
         a->src_port == b->src_port && a->dst_port == b->dst_port &&
         a->proto == b->proto && a->direction == b->direction &&
         a->ifindex == b->ifindex && a->action == b->action &&
@@ -129,6 +134,9 @@ void network_log_record(struct network_log *log, const struct packet_event *evt)
     unsigned hash = evt->src_ip ^ (evt->dst_ip * 16777619u) ^
         ((unsigned)evt->src_port << 16) ^ evt->dst_port ^ evt->ifindex ^ evt->proto;
     hash ^= hash >> 16;
+    for (int i = 0; i < 4; i++)
+        hash = (hash * 16777619u) ^ evt->src_ip6.words[i] ^ evt->dst_ip6.words[i];
+    hash ^= evt->family;
     struct network_log_entry *entry = &log->entries[hash % NETWORK_LOG_BUCKETS];
     if (entry->count && (!same_key(&entry->event, evt) ||
         (evt->timestamp_ns > entry->event.timestamp_ns &&

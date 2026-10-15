@@ -4,6 +4,13 @@ A high-throughput, kernel-native stateful firewall built on **eBPF** and **XDP**
 
 ---
 
+## Dual-stack IPv4 / IPv6
+
+All firewall variants support IPv6 TCP, UDP, ICMPv6, CIDR rules and
+family-isolated state tracking. See [IPv6 support](docs/IPV6.md) for deployment,
+tests, extension-header limits and the map ABI migration requirement.
+
+
 ## 📋 Architectural Overview (The 16 Steps)
 
 1. **Single Linux Host**: Runs host routing, Incus container lab, and the eBPF kernel dataplane.
