@@ -39,10 +39,38 @@ int main(void)
     assert(strstr(line, "\"action\":\"drop\""));
     assert(!fgets(line, sizeof(line), file));
     fclose(file);
+    struct packet_event ipv6 = event;
+    ipv6.src_ip = ipv6.dst_ip = 0;
+    ipv6.family = FW_AF_INET6;
+    assert(inet_pton(AF_INET6, "2001:db8::1", &ipv6.src_ip6) == 1);
+    assert(inet_pton(AF_INET6, "2001:db8::2", &ipv6.dst_ip6) == 1);
+    network_log_record(log, &ipv6);
+    network_log_record(log, &ipv6);
+    /* Addresses differing only in the final IPv6 word must not merge. */
+    assert(inet_pton(AF_INET6, "2001:db8::3", &ipv6.dst_ip6) == 1);
+    network_log_record(log, &ipv6);
+    network_log_flush(log);
+    file = fopen(path, "r");
+    assert(file);
+    int first_ipv6 = 0, second_ipv6 = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "\"dst_ip\":\"2001:db8::2\"")) {
+            assert(strstr(line, "\"src_ip\":\"2001:db8::1\""));
+            assert(strstr(line, "\"event_count\":2"));
+            first_ipv6++;
+        }
+        if (strstr(line, "\"dst_ip\":\"2001:db8::3\"")) {
+            assert(strstr(line, "\"event_count\":1"));
+            second_ipv6++;
+        }
+    }
+    assert(first_ipv6 == 1 && second_ipv6 == 1);
+    fclose(file);
+    __u64 evictions = log->evictions;
     network_log_record(log, &event);
     event.reason = REASON_INVALID_STATE;
     network_log_record(log, &event);
-    assert(log->evictions == 1); /* different reasons never silently merge */
+    assert(log->evictions == evictions + 1); /* different reasons never silently merge */
     network_log_flush(log);
     for (int i = 0; i < 50; i++) network_log_health(log, 3, 1);
     network_log_close(log);

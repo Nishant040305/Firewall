@@ -1,5 +1,9 @@
 # Network visibility without alert fatigue
 
+IPv4 and IPv6 addresses are emitted as canonical strings and aggregation keys
+include the complete 128-bit addresses and address family. See [IPv6 support](IPV6.md)
+for dual-stack policy, Neighbor Discovery limits and the required map ABI restart.
+
 This first stage adds **evidence logging**, not attack detection, automatic blocking,
 or a public dashboard. A firewall drop is not proof of an attack. All network
 records are informational; filtering the viewer never changes firewall policy.
