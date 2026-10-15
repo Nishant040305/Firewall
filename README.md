@@ -2,7 +2,20 @@
 
 ## Combined selective-build branch
 
-On `feat/selective-build`, choose an engine and optional features at compilation:
+Choose a build preset (FastCache is the default engine):
+
+```bash
+make help
+make select                              # Interactive engine/feature selector
+make -j4 logging                         # Logging on, timing off, full observability
+make -j4 lean                            # No logging, timing, or observability
+make -j4 timing ENGINE=stateful           # Timing + counters, no logging
+make -j4 debug ENGINE=dualmap             # Timing + logging + full observability
+make PRESET=logging print-config         # Preview options and output path
+```
+
+These commands compile only; they never attach the firewall. Explicit options
+override preset defaults. You can also select every option directly:
 
 ```bash
 make -j4 ENGINE=fastcache                       # One selected object, no timing/logging

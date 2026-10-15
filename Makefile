@@ -1,9 +1,42 @@
 CC ?= gcc
 CLANG ?= clang
+# Presets only supply defaults; explicit feature variables still take priority.
+PRESETS := default logging timing minimal lean debug
+PRESET_GOALS := $(filter $(PRESETS),$(MAKECMDGOALS))
+ifneq ($(word 2,$(PRESET_GOALS)),)
+$(error Choose only one preset: $(PRESETS))
+endif
+PRESET ?= $(if $(PRESET_GOALS),$(PRESET_GOALS),default)
+ifeq ($(filter $(PRESET),$(PRESETS)),)
+$(error PRESET must be one of: $(PRESETS))
+endif
+ifneq ($(PRESET_GOALS),)
+ifneq ($(PRESET),$(PRESET_GOALS))
+$(error PRESET=$(PRESET) conflicts with target $(PRESET_GOALS))
+endif
+endif
+preset_timing_default := 0
+preset_timing_logging := 0
+preset_timing_timing := 1
+preset_timing_minimal := 0
+preset_timing_lean := 0
+preset_timing_debug := 1
+preset_logging_default := 0
+preset_logging_logging := 1
+preset_logging_timing := 0
+preset_logging_minimal := 0
+preset_logging_lean := 0
+preset_logging_debug := 1
+preset_obs_default := full
+preset_obs_logging := full
+preset_obs_timing := minimal
+preset_obs_minimal := minimal
+preset_obs_lean := none
+preset_obs_debug := full
 ENGINE ?= fastcache
-TIMING ?= 0
-LOGGING ?= 0
-OBSERVABILITY ?= full
+TIMING ?= $(preset_timing_$(PRESET))
+LOGGING ?= $(preset_logging_$(PRESET))
+OBSERVABILITY ?= $(preset_obs_$(PRESET))
 
 ENGINES := stateful fastcache dualmap
 OBS_MODES := full minimal none
@@ -60,7 +93,7 @@ BPF_OBJ := $(BUILD_DIR)/firewall.bpf.o
 USER_BIN := $(BUILD_DIR)/fw-ctl
 TEST_BIN := $(BUILD_DIR)/ipv6-test
 .DEFAULT_GOAL := all
-.PHONY: all bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging test-tc-context print-config FORCE
+.PHONY: all $(PRESETS) help select bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging test-tc-context print-config FORCE
 
 # Changing compiler/flags must invalidate this profile, but an unchanged
 # invocation leaves timestamps alone and performs no compilation.
@@ -73,8 +106,38 @@ $(USER_OBJS) $(BPF_OBJ) $(TEST_BIN) $(BUILD_DIR)/test/ipv6_test.o: $(BUILD_DIR)/
 
 # Build one selected firewall object and its matching control plane only.
 all: $(BPF_OBJ) $(USER_BIN)
+$(PRESETS): all
 bpf: $(BPF_OBJ)
 userspace: $(USER_BIN)
+
+select:
+	@python3 scripts/build_selector.py
+
+help:
+	@printf '%s\n' \
+	  'Build only; no target starts or attaches the firewall.' \
+	  '' \
+	  'Usage: make -j4 [preset] [ENGINE=fastcache|stateful|dualmap]' \
+	  '  make select                            # Interactive build selector' \
+	  '' \
+	  'Preset    TIMING LOGGING OBSERVABILITY' \
+	  'default   0      0       full  (plain make)' \
+	  'logging   0      1       full' \
+	  'timing    1      0       minimal' \
+	  'minimal   0      0       minimal' \
+	  'lean      0      0       none' \
+	  'debug     1      1       full  (telemetry, not optimization flags)' \
+	  '' \
+	  'Examples:' \
+	  '  make -j4 logging                       # FastCache + network logs' \
+	  '  make -j4 lean ENGINE=stateful' \
+	  '  make -j4 debug ENGINE=dualmap' \
+	  '  make PRESET=logging print-config       # Preview without compiling' \
+	  '  make PRESET=logging clean              # Clean only that profile' \
+	  '' \
+	  'Overrides: TIMING=0|1 LOGGING=0|1 OBSERVABILITY=full|minimal|none' \
+	  'Logging requires full; timing requires full or minimal.' \
+	  'Outputs: build/profiles/<engine>-t<timing>-l<logging>-<observability>/'
 
 $(BUILD_DIR)/%.o: src/userspace/%.c
 	@mkdir -p $(dir $@)
@@ -121,6 +184,7 @@ test-logging:
 	python3 test/test_network_logs.py
 
 print-config:
+	@echo "preset=$(PRESET) (explicit option overrides take priority)"
 	@echo "engine=$(ENGINE) timing=$(TIMING) logging=$(LOGGING) observability=$(OBSERVABILITY)"
 	@echo "output=$(BUILD_DIR)"
 	@echo "sources=$(USER_SRCS)"

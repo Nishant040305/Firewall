@@ -7,6 +7,36 @@ connection layouts are shared.
 
 ## Build exactly what you need
 
+Use `make help` to list shortcuts. FastCache is the default engine for all
+presets; add `ENGINE=stateful` or `ENGINE=dualmap` to change it.
+
+For a guided terminal menu, run `make select` (requires Python 3). Choose the
+engine, timing, network logging, observability and parallel build jobs. Logging
+automatically selects full observability; timing prevents selecting none. The
+selector previews the exact command and output directory and asks before
+compiling. Enter accepts a default; Ctrl+C cancels. It never attaches the
+firewall. For preview only, use `python3 scripts/build_selector.py --dry-run`.
+
+| Preset target | Timing | Logging | Observability |
+| --- | --- | --- | --- |
+| `default` (or plain `make`) | 0 | 0 | full |
+| `logging` | 0 | 1 | full |
+| `timing` | 1 | 0 | minimal |
+| `minimal` | 0 | 0 | minimal |
+| `lean` | 0 | 0 | none |
+| `debug` | 1 | 1 | full |
+
+For example, `make -j4 logging` builds FastCache with network logs and no
+timing. `debug` enables telemetry features, not different compiler optimization
+flags. Choose only one preset per invocation. Explicit option values override
+preset defaults; invalid combinations still fail rather than silently changing
+your selection.
+
+Use `make PRESET=logging print-config` to preview without compiling, or
+`make PRESET=logging clean` to clean that profile. Named preset targets build
+the firewall, so `make logging print-config` also compiles it. None of these
+targets starts a daemon or attaches packet filters.
+
 ```bash
 make -j4 ENGINE=fastcache
 make -j4 ENGINE=stateful OBSERVABILITY=minimal
