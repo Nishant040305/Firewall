@@ -179,9 +179,9 @@ int rules_mgr_load_file(int map_fd, const char *filepath)
         if (strcmp(key, "action") == 0) {
             if (strcasecmp(val, "allow") == 0 || strcasecmp(val, "pass") == 0) {
                 current_rule.action = ACTION_PASS;
-            } else {
+            } else if (strcasecmp(val, "drop") == 0) {
                 current_rule.action = ACTION_DROP;
-            }
+            } else goto invalid;
         } else if (strcmp(key, "proto") == 0 || strcmp(key, "protocol") == 0) {
             current_rule.flags |= RULE_FLAG_PROTO;
             if (strcasecmp(val, "tcp") == 0) current_rule.proto = PROTO_TCP;

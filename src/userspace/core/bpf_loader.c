@@ -11,6 +11,34 @@
 #include "bpf_loader.h"
 #include "config.h"
 
+static int validate_object_profile(struct bpf_object *obj)
+{
+    struct bpf_map *ct = bpf_object__find_map_by_name(obj, "conntrack_map");
+    struct bpf_map *rules = bpf_object__find_map_by_name(obj, "rules_map");
+    if (!ct || !rules || bpf_map__key_size(ct) != sizeof(struct flow_key) ||
+        bpf_map__value_size(ct) != sizeof(struct flow_entry) ||
+        bpf_map__value_size(rules) != sizeof(struct fw_rule) ||
+        bpf_map__type(ct) != (FW_ENGINE == FW_ENGINE_DUALMAP ?
+            BPF_MAP_TYPE_HASH : BPF_MAP_TYPE_LRU_HASH) ||
+        !!bpf_object__find_map_by_name(obj, "flow_cache_map") != (FW_ENGINE == FW_ENGINE_FASTCACHE) ||
+        !!bpf_object__find_map_by_name(obj, "ct_syn_map") != (FW_ENGINE == FW_ENGINE_DUALMAP) ||
+        !!bpf_object__find_map_by_name(obj, "perf_map") != !!FW_TIMING ||
+        !!bpf_object__find_map_by_name(obj, "events_ringbuf") != (FW_OBSERVABILITY == 0) ||
+        !!bpf_object__find_map_by_name(obj, "stats_map") != (FW_OBSERVABILITY != 2)) {
+        fprintf(stderr, "[-] BPF object does not match this control-plane build profile\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int map_matches(int fd, __u32 type, __u32 key_size, __u32 value_size)
+{
+    struct bpf_map_info info = {0};
+    __u32 size = sizeof(info);
+    return fd >= 0 && !bpf_obj_get_info_by_fd(fd, &info, &size) &&
+           info.type == type && info.key_size == key_size && info.value_size == value_size;
+}
+
 static int attach_xdp(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
 {
     struct bpf_program *prog = bpf_object__find_program_by_name(ctx->obj, "xdp_firewall_prog");
@@ -129,6 +157,8 @@ static int attach_tc_egress(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
 int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const struct firewall_config *cfg)
 {
     memset(ctx, 0, sizeof(*ctx));
+    ctx->flow_cache_map_fd = ctx->syn_map_fd = ctx->perf_map_fd = -1;
+    ctx->rules_map_fd = ctx->conntrack_map_fd = ctx->stats_map_fd = ctx->events_ringbuf_fd = -1;
     snprintf(ctx->ifname, sizeof(ctx->ifname), "%s", cfg->interface);
     ctx->direction = cfg->direction;
     ctx->mode = cfg->mode;
@@ -180,11 +210,24 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
         fprintf(stderr, "[-] Error: Failed to open BPF ELF file: %s\n", strerror(errno));
         return -1;
     }
+    if (validate_object_profile(ctx->obj)) {
+        bpf_object__close(ctx->obj);
+        ctx->obj = NULL;
+        return -1;
+    }
 
     printf("[+] Loading BPF program into kernel...\n");
     int err = bpf_object__load(ctx->obj);
     if (err) {
         fprintf(stderr, "[-] Error: Failed to load BPF object: %s (%d)\n", strerror(-err), err);
+        bpf_object__close(ctx->obj);
+        ctx->obj = NULL;
+        return -1;
+    }
+
+    /* Reserve pins before attaching: never replace another running daemon's
+     * maps or leave a live program attached after a pin failure. */
+    if (bpf_loader_pin_maps(ctx)) {
         bpf_object__close(ctx->obj);
         ctx->obj = NULL;
         return -1;
@@ -237,9 +280,8 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
     ctx->rules_map_fd      = bpf_object__find_map_fd_by_name(ctx->obj, "rules_map");
     ctx->conntrack_map_fd  = bpf_object__find_map_fd_by_name(ctx->obj, "conntrack_map");
     ctx->flow_cache_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "flow_cache_map");
-
-    /* Pin maps to bpffs if directory exists or can be created */
-    bpf_loader_pin_maps(ctx);
+    ctx->syn_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "ct_syn_map");
+    ctx->perf_map_fd = bpf_object__find_map_fd_by_name(ctx->obj, "perf_map");
 
     return 0;
 }
@@ -248,15 +290,12 @@ int bpf_loader_pin_maps(struct bpf_loader_ctx *ctx)
 {
     if (!ctx->obj) return -1;
 
-    /* Unlink stale pinned maps from previous runs so new maps pin cleanly */
-    unlink(MAP_PIN_RULES);
-    unlink(MAP_PIN_CONNTRACK);
-    unlink(MAP_PIN_CACHE);
-    unlink(MAP_PIN_STATS);
-    unlink(MAP_PIN_EVENTS);
-
-    /* Create bpffs dir if not exists */
-    bpf_object__pin_maps(ctx->obj, BPF_FS_PATH);
+    int err = bpf_object__pin_maps(ctx->obj, BPF_FS_PATH);
+    if (err) {
+        fprintf(stderr, "[-] Cannot reserve firewall map pins: %s. Stop the existing daemon or clean stale pins first.\n", strerror(-err));
+        return -1;
+    }
+    ctx->maps_pinned = 1;
     return 0;
 }
 
@@ -266,10 +305,21 @@ int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx)
     ctx->rules_map_fd = bpf_obj_get(MAP_PIN_RULES);
     ctx->conntrack_map_fd = bpf_obj_get(MAP_PIN_CONNTRACK);
     ctx->flow_cache_map_fd = bpf_obj_get(MAP_PIN_CACHE);
+    ctx->syn_map_fd = bpf_obj_get(MAP_PIN_CONNTRACK_SYN);
+    ctx->perf_map_fd = bpf_obj_get(MAP_PIN_PERF);
     ctx->stats_map_fd = bpf_obj_get(MAP_PIN_STATS);
     ctx->events_ringbuf_fd = bpf_obj_get(MAP_PIN_EVENTS);
 
-    if (ctx->rules_map_fd < 0 && ctx->stats_map_fd < 0 && ctx->conntrack_map_fd < 0) {
+    if (!map_matches(ctx->rules_map_fd, BPF_MAP_TYPE_ARRAY, sizeof(__u32), sizeof(struct fw_rule)) ||
+        !map_matches(ctx->conntrack_map_fd, FW_ENGINE == FW_ENGINE_DUALMAP ? BPF_MAP_TYPE_HASH : BPF_MAP_TYPE_LRU_HASH,
+                     sizeof(struct flow_key), sizeof(struct flow_entry)) ||
+        (ctx->flow_cache_map_fd >= 0) != (FW_ENGINE == FW_ENGINE_FASTCACHE) ||
+        (ctx->syn_map_fd >= 0) != (FW_ENGINE == FW_ENGINE_DUALMAP) ||
+        (ctx->perf_map_fd >= 0) != !!FW_TIMING ||
+        (ctx->events_ringbuf_fd >= 0) != (FW_OBSERVABILITY == 0) ||
+        (ctx->stats_map_fd >= 0) != (FW_OBSERVABILITY != 2)) {
+        fprintf(stderr, "[-] Pinned maps are missing or belong to a different build profile\n");
+        bpf_loader_cleanup(ctx);
         return -1;
     }
     return 0;
@@ -313,14 +363,21 @@ void bpf_loader_cleanup(struct bpf_loader_ctx *ctx)
     ctx->tc_ingress_attached = 0;
     ctx->tc_egress_attached = 0;
 
-    unlink(MAP_PIN_RULES);
-    unlink(MAP_PIN_CONNTRACK);
-    unlink(MAP_PIN_CACHE);
-    unlink(MAP_PIN_STATS);
-    unlink(MAP_PIN_EVENTS);
+    if (ctx->maps_pinned && ctx->obj) {
+        bpf_object__unpin_maps(ctx->obj, BPF_FS_PATH);
+        ctx->maps_pinned = 0;
+    }
 
     if (ctx->obj) {
         bpf_object__close(ctx->obj);
         ctx->obj = NULL;
+    } else {
+        int *fds[] = {&ctx->rules_map_fd, &ctx->conntrack_map_fd,
+                      &ctx->flow_cache_map_fd, &ctx->syn_map_fd,
+                      &ctx->perf_map_fd, &ctx->stats_map_fd, &ctx->events_ringbuf_fd};
+        for (unsigned i = 0; i < sizeof(fds) / sizeof(*fds); i++) {
+            if (*fds[i] >= 0) close(*fds[i]);
+            *fds[i] = -1;
+        }
     }
 }

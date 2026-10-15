@@ -36,8 +36,11 @@
 char LICENSE[] SEC("license") = "GPL";
 
 /* Shared 5-Tuple Stateful Decision Pipeline */
-static __always_inline int process_packet(struct pkt_ctx *pkt)
+static __always_inline int process_packet_impl(struct pkt_ctx *pkt)
 {
+#if FW_TIMING
+    __u64 extract_start = bpf_ktime_get_ns();
+#endif
     /* 1. L2: Ethernet Parsing */
     if (parse_eth(pkt) < 0) {
         return ACTION_PASS;
@@ -63,6 +66,12 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     int decision = ACTION_PASS;
     __u64 now = 0;
 
+#if FW_TIMING
+#define RECORD_EXTRACTION() record_step_time(STEP_EXTRACTION, bpf_ktime_get_ns() - extract_start)
+#else
+#define RECORD_EXTRACTION() do {} while (0)
+#endif
+
     switch (pkt->proto) {
     case IPPROTO_TCP:
         if (parse_tcp(pkt) < 0) {
@@ -70,6 +79,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
+            RECORD_EXTRACTION();
             now = bpf_ktime_get_ns();
             decision = process_tcp_state(pkt, now);
         }
@@ -80,6 +90,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
+            RECORD_EXTRACTION();
             now = bpf_ktime_get_ns();
             decision = process_udp_state(pkt, now);
         }
@@ -91,6 +102,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             pkt->reason = REASON_MALFORMED;
             decision = ACTION_DROP;
         } else {
+            RECORD_EXTRACTION();
             now = bpf_ktime_get_ns();
             if (valid_neighbor_discovery(pkt))
                 decision = ACTION_PASS;
@@ -101,12 +113,16 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         }
         break;
     default:
+        RECORD_EXTRACTION();
         decision = evaluate_rules(pkt);
         pkt->action = decision;
         break;
     }
 
     /* 4. Update Statistics & Emit Telemetry Event (Consolidated after parsing) */
+#if FW_TIMING
+    __u64 stat_start = bpf_ktime_get_ns();
+#endif
     inc_stat(STAT_TOTAL_PACKETS);
     if (pkt->direction == DIR_INGRESS) {
         inc_stat(STAT_INGRESS_PACKETS);
@@ -131,6 +147,11 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     }
 
     pkt->action = decision;
+#if FW_TIMING
+    __u64 stat_ns = bpf_ktime_get_ns() - stat_start;
+    record_step_time(STEP_UPDATE_STATS, stat_ns);
+    pkt->time_update_ns += stat_ns;
+#endif
 #ifndef MINIMAL_OBSERVABILITY
     /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
     if (decision == ACTION_DROP || pkt->new_flow ||
@@ -140,8 +161,34 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         pkt->conn_state == CONN_STATE_FIN_WAIT ||
         pkt->conn_state == CONN_STATE_NEW ||
         (pkt->proto == IPPROTO_TCP && (pkt->tcp_flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST)))) {
+#if FW_TIMING
+        __u64 event_start = bpf_ktime_get_ns();
+#endif
         emit_packet_event(pkt);
+#if FW_TIMING
+        __u64 ns = bpf_ktime_get_ns() - event_start;
+        record_step_time(STEP_UPDATE_RINGBUF, ns);
+        pkt->time_update_ns += ns;
+#endif
     }
+#endif
+    return decision;
+}
+
+#undef RECORD_EXTRACTION
+
+static __always_inline int process_packet(struct pkt_ctx *pkt)
+{
+#if FW_TIMING
+    __u64 start = bpf_ktime_get_ns();
+    pkt->time_lookup_ns = 0;
+    pkt->time_update_ns = 0;
+#endif
+    int decision = process_packet_impl(pkt);
+#if FW_TIMING
+    record_step_time(STEP_LOOKUP_TOTAL, pkt->time_lookup_ns);
+    record_step_time(STEP_UPDATE_TOTAL, pkt->time_update_ns);
+    record_step_time(STEP_TOTAL_PIPELINE, bpf_ktime_get_ns() - start);
 #endif
     return decision;
 }

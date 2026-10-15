@@ -5,14 +5,18 @@ struct ring_buffer;
 #include <linux/types.h>
 #include <core/types.h>
 #include <core/stats.h>
+#if FW_LOGGING
 #include "network_log.h"
+#endif
 #include "../core/config.h"
 
 /* Ring buffer consumer and bounded metadata evidence log. */
 struct event_bus {
     struct ring_buffer *rb;
     int stats_map_fd;
+#if FW_LOGGING
     struct network_log log;
+#endif
 };
 
 /* Initialize Event Bus with RingBuffer and Stats Map FDs */

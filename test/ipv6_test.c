@@ -44,6 +44,13 @@ static void unit_tests(void)
     assert(opts.new_rule.family == FW_AF_INET6);
     assert(opts.new_rule.flags & RULE_FLAG_DST_PORT);
     assert(opts.new_rule.flags & RULE_FLAG_SRC_PORT);
+    char *bad_action[] = {"fw-ctl", "rule", "add", "--action", "alow"};
+    assert(parse_cli_args(5, bad_action, &opts) < 0);
+#if FW_TIMING
+    char *perf_args[] = {"fw-ctl", "perf", "show", "--json"};
+    assert(!parse_cli_args(4, perf_args, &opts));
+    assert(opts.cmd == CMD_PERF_SHOW && opts.json_output);
+#endif
     puts("IPv4/IPv6 address, CIDR and CLI tests passed");
 }
 
@@ -110,6 +117,15 @@ static void dataplane_tests(const char *path)
 {
     struct bpf_object *obj = bpf_object__open_file(path, NULL);
     assert(!libbpf_get_error(obj));
+    assert(!!bpf_object__find_map_by_name(obj, "flow_cache_map") ==
+           (FW_ENGINE == FW_ENGINE_FASTCACHE));
+    assert(!!bpf_object__find_map_by_name(obj, "ct_syn_map") ==
+           (FW_ENGINE == FW_ENGINE_DUALMAP));
+    assert(!!bpf_object__find_map_by_name(obj, "perf_map") == !!FW_TIMING);
+    assert(!!bpf_object__find_map_by_name(obj, "events_ringbuf") ==
+           (FW_OBSERVABILITY == 0));
+    assert(!!bpf_object__find_map_by_name(obj, "stats_map") ==
+           (FW_OBSERVABILITY != 2));
     assert(!bpf_object__load(obj)); /* Verifies XDP and both TC programs. */
     int fd = bpf_program__fd(bpf_object__find_program_by_name(obj, "xdp_firewall_prog"));
     int map = bpf_map__fd(bpf_object__find_map_by_name(obj, "rules_map"));
@@ -219,7 +235,7 @@ static void dataplane_tests(const char *path)
     assert(!bpf_map_update_elem(map, &key, &r, BPF_ANY));
     run(fd, packet(6, IPPROTO_ICMPV6, 0, 2, 0), 1, "ICMPv6 error does not reuse echo state");
     struct bpf_map *perf = bpf_object__find_map_by_name(obj, "perf_map");
-    if (perf && !strstr(path, "zero_obs")) {
+    if (perf) {
         int cpus = libbpf_num_possible_cpus();
         struct metric { __u64 total, count, min, max; };
         struct metric *values = calloc(cpus, sizeof(*values));

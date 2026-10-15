@@ -26,6 +26,40 @@ static const char *state_to_str(enum conn_state st)
     }
 }
 
+#if FW_ENGINE == FW_ENGINE_DUALMAP
+/* Bounded deletion batch, no background thread or volatile data race. */
+int conntrack_mgr_gc_sweep(int map_fd)
+{
+    if (map_fd < 0) return -1;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts)) return -1;
+    __u64 now = (__u64)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+    struct flow_key key, next, expired[256];
+    const struct flow_key *previous = NULL;
+    unsigned count = 0, scanned = 0;
+    while (scanned++ < MAX_FLOW_ENTRIES * 2 && count < 256 &&
+           !bpf_map_get_next_key(map_fd, previous, &next)) {
+        struct flow_entry e;
+        if (!bpf_map_lookup_elem(map_fd, &next, &e) &&
+            (e.state == CONN_STATE_CLOSED ||
+             (now > e.last_seen_ns && now - e.last_seen_ns > e.timeout_ns)))
+            expired[count++] = next;
+        key = next;
+        previous = &key;
+    }
+    /* Re-read before deletion to avoid removing a flow refreshed during scan.
+     * This remains best-effort GC; map access and deletion are not atomic. */
+    for (unsigned i = 0; i < count; i++) {
+        struct flow_entry e;
+        if (!bpf_map_lookup_elem(map_fd, &expired[i], &e) &&
+            (e.state == CONN_STATE_CLOSED ||
+             (now > e.last_seen_ns && now - e.last_seen_ns > e.timeout_ns)))
+            bpf_map_delete_elem(map_fd, &expired[i]);
+    }
+    return count;
+}
+#endif
+
 int conntrack_mgr_list(int map_fd)
 {
     if (map_fd < 0) return -1;
@@ -97,6 +131,7 @@ int conntrack_mgr_flush(int map_fd, int cache_map_fd)
         count++;
     }
 
+#if FW_ENGINE == FW_ENGINE_FASTCACHE
     if (cache_map_fd >= 0) {
         int ncpus = libbpf_num_possible_cpus();
         if (ncpus <= 0) ncpus = 1;
@@ -108,6 +143,9 @@ int conntrack_mgr_flush(int map_fd, int cache_map_fd)
             free(zero_entries);
         }
     }
+#else
+    (void)cache_map_fd;
+#endif
 
     printf("[+] Flushed %d connection tracking entries.\n", count);
     return 0;

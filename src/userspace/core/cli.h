@@ -15,6 +15,10 @@ enum cli_cmd {
     CMD_STATS_SHOW,
     CMD_STATS_RESET,
     CMD_STATUS,
+#if FW_TIMING
+    CMD_PERF_SHOW,
+    CMD_PERF_RESET,
+#endif
 };
 
 struct firewall_options {

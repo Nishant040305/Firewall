@@ -1,98 +1,127 @@
 CC ?= gcc
 CLANG ?= clang
-CFLAGS ?= -O2 -g -Wall -Iinclude -Isrc/userspace
+ENGINE ?= fastcache
+TIMING ?= 0
+LOGGING ?= 0
+OBSERVABILITY ?= full
 
-# Architecture and multiarch header detection
-ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/' | sed 's/armv[0-9]*/arm/')
+ENGINES := stateful fastcache dualmap
+OBS_MODES := full minimal none
+ifeq ($(filter $(ENGINE),$(ENGINES)),)
+$(error ENGINE must be one of: $(ENGINES))
+endif
+ifeq ($(filter $(OBSERVABILITY),$(OBS_MODES)),)
+$(error OBSERVABILITY must be one of: $(OBS_MODES))
+endif
+ifneq ($(filter $(TIMING),0 1),$(TIMING))
+$(error TIMING must be 0 or 1)
+endif
+ifneq ($(filter $(LOGGING),0 1),$(LOGGING))
+$(error LOGGING must be 0 or 1)
+endif
+ifeq ($(TIMING):$(OBSERVABILITY),1:none)
+$(error TIMING=1 requires OBSERVABILITY=full or minimal)
+endif
+ifeq ($(LOGGING),1)
+ifneq ($(OBSERVABILITY),full)
+$(error LOGGING=1 requires OBSERVABILITY=full)
+endif
+endif
+
+engine_stateful := 1
+engine_fastcache := 2
+engine_dualmap := 3
+obs_full := 0
+obs_minimal := 1
+obs_none := 2
+PROFILE := $(ENGINE)-t$(TIMING)-l$(LOGGING)-$(OBSERVABILITY)
+BUILD_DIR := build/profiles/$(PROFILE)
+ARCH ?= $(shell uname -m | sed 's/x86_64/x86/;s/aarch64/arm64/;s/armv[0-9]*/arm/')
 MULTIARCH ?= $(shell gcc -print-multiarch 2>/dev/null)
 ARCH_INC := $(if $(MULTIARCH),-I/usr/include/$(MULTIARCH),)
-
 RAW_ARCH ?= $(shell uname -m)
-BPF_CFLAGS ?= -O2 -g -Wall -target bpf -mcpu=v3 -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -I/usr/include -Iinclude -Isrc/kernel
+CPPFLAGS += -Iinclude -Isrc/userspace -DFW_ENGINE=$(engine_$(ENGINE)) -DFW_TIMING=$(TIMING) -DFW_LOGGING=$(LOGGING) -DFW_OBSERVABILITY=$(obs_$(OBSERVABILITY))
+CPPFLAGS += -DFW_DEFAULT_BPF_OBJ='"$(BUILD_DIR)/firewall.bpf.o"'
+CFLAGS ?= -O2 -g -Wall -Wextra
+BPF_CFLAGS ?= -O2 -g -Wall -target bpf -mcpu=v3 -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -Isrc/kernel
+LDLIBS := -lbpf -lelf -lz
 
-BUILD_DIR = build
-
-BPF_SRC = src/kernel/main.bpf.c
-BPF_DEPS = $(shell find include/ -type f -name "*.h") $(shell find src/kernel/ -type f -name "*.h")
-BPF_OBJ = $(BUILD_DIR)/firewall.bpf.o
-
-USER_SRCS = src/userspace/main.c \
-            src/userspace/core/cli.c \
-            src/userspace/core/config.c \
-            src/userspace/core/bpf_loader.c \
-            src/userspace/core/firewall_ctx.c \
-            src/userspace/core/rules_mgr.c \
-            src/userspace/core/conntrack_mgr.c \
-            src/userspace/core/stats_mgr.c \
-            src/userspace/utils/ip_utils.c \
-            src/userspace/utils/format_utils.c \
-            src/userspace/protocols/protocol_registry.c \
-            src/userspace/protocols/proto_tcp.c \
-            src/userspace/protocols/proto_udp.c \
-            src/userspace/protocols/proto_icmp.c \
-            src/userspace/telemetry/event_bus.c \
-            src/userspace/telemetry/network_log.c
-
-USER_OBJS = $(patsubst src/userspace/%.c,$(BUILD_DIR)/%.o,$(USER_SRCS))
-USER_DEPS = $(shell find include/ src/userspace/ -type f -name "*.h")
--include $(USER_OBJS:.o=.d)
-USER_BIN = $(BUILD_DIR)/fw-ctl
-CTL_ALIAS = $(BUILD_DIR)/firewallctl
-
+USER_SRCS := $(addprefix src/userspace/,main.c core/cli.c core/config.c core/bpf_loader.c core/firewall_ctx.c core/rules_mgr.c core/conntrack_mgr.c core/stats_mgr.c utils/ip_utils.c)
+ifeq ($(LOGGING),1)
+USER_SRCS += src/userspace/telemetry/event_bus.c src/userspace/telemetry/network_log.c
+else ifeq ($(OBSERVABILITY),full)
+USER_SRCS += src/userspace/telemetry/console_bus.c
+endif
+ifeq ($(TIMING),1)
+USER_SRCS += src/userspace/core/perf_mgr.c
+endif
+USER_OBJS := $(patsubst src/userspace/%.c,$(BUILD_DIR)/%.o,$(USER_SRCS))
+BPF_OBJ := $(BUILD_DIR)/firewall.bpf.o
+USER_BIN := $(BUILD_DIR)/fw-ctl
+TEST_BIN := $(BUILD_DIR)/ipv6-test
 .DEFAULT_GOAL := all
+.PHONY: all bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging print-config FORCE
 
-.PHONY: all bpf userspace clean test-logging
-.PHONY: test-ipv6 test-ipv6-kernel
+# Changing compiler/flags must invalidate this profile, but an unchanged
+# invocation leaves timestamps alone and performs no compilation.
+$(BUILD_DIR)/.flags: FORCE
+	@mkdir -p $(BUILD_DIR)
+	@printf '%s\n' '$(CC) $(CLANG) $(CPPFLAGS) $(CFLAGS) $(BPF_CFLAGS) $(LDLIBS)' > $@.tmp
+	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 
-$(BUILD_DIR)/ipv6-test: test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c src/userspace/core/rules_mgr.c $(USER_DEPS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) test/ipv6_test.c src/userspace/utils/ip_utils.c src/userspace/core/cli.c src/userspace/core/rules_mgr.c -lbpf -lelf -lz -o $@
+$(USER_OBJS) $(BPF_OBJ) $(TEST_BIN) $(BUILD_DIR)/test/ipv6_test.o: $(BUILD_DIR)/.flags
 
-test-ipv6: $(BUILD_DIR)/ipv6-test
-	./$(BUILD_DIR)/ipv6-test
-
-test-ipv6-kernel: all $(BUILD_DIR)/ipv6-test
-	./$(BUILD_DIR)/ipv6-test $(BPF_OBJ)
-	./$(BUILD_DIR)/ipv6-test $(BPF_FAST_OBJ)
-	./$(BUILD_DIR)/ipv6-test $(BPF_ZERO_OBJ)
-
-BPF_PASS_SRC = src/kernel/xdp_pass.bpf.c
-BPF_PASS_OBJ = $(BUILD_DIR)/xdp_pass.bpf.o
-BPF_FAST_OBJ = $(BUILD_DIR)/firewall_fast.bpf.o
-BPF_ZERO_OBJ = $(BUILD_DIR)/firewall_zero_obs.bpf.o
-
-all: $(BUILD_DIR) $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ) $(USER_BIN)
-
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)/core $(BUILD_DIR)/utils $(BUILD_DIR)/protocols $(BUILD_DIR)/telemetry
-
-bpf: $(BPF_OBJ) $(BPF_PASS_OBJ) $(BPF_FAST_OBJ) $(BPF_ZERO_OBJ)
-
-$(BPF_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
-	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
-
-$(BPF_PASS_OBJ): $(BPF_PASS_SRC) | $(BUILD_DIR)
-	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
-
-$(BPF_FAST_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
-	$(CLANG) $(BPF_CFLAGS) -DMINIMAL_OBSERVABILITY -c $< -o $@
-
-$(BPF_ZERO_OBJ): $(BPF_SRC) $(BPF_DEPS) | $(BUILD_DIR)
-	$(CLANG) $(BPF_CFLAGS) -DNO_OBSERVABILITY -DMINIMAL_OBSERVABILITY -c $< -o $@
-
+# Build one selected firewall object and its matching control plane only.
+all: $(BPF_OBJ) $(USER_BIN)
+bpf: $(BPF_OBJ)
 userspace: $(USER_BIN)
 
-$(BUILD_DIR)/%.o: src/userspace/%.c $(USER_DEPS) | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: src/userspace/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-$(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -o $@
-	ln -sf fw-ctl $(CTL_ALIAS)
+$(BPF_OBJ): src/kernel/main.bpf.c
+	@mkdir -p $(dir $@)
+	$(CLANG) $(CPPFLAGS) $(BPF_CFLAGS) -MMD -MP -c src/kernel/main.bpf.c -o $@
 
+$(USER_BIN): $(USER_OBJS)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+	ln -sf fw-ctl $(BUILD_DIR)/firewallctl
+
+# Optional tools are not dependencies of all.
+tools: $(BUILD_DIR)/conntrack_bench_tool
+$(BUILD_DIR)/conntrack_bench_tool: test/conntrack_bench_tool.c include/core/conntrack.h include/core/build_config.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -lbpf -lm -o $@
+
+baseline: $(BUILD_DIR)/xdp_pass.bpf.o
+$(BUILD_DIR)/xdp_pass.bpf.o: src/kernel/xdp_pass.bpf.c
+	@mkdir -p $(dir $@)
+	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/test/ipv6_test.o: test/ipv6_test.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c test/ipv6_test.c -o $@
+$(TEST_BIN): $(BUILD_DIR)/test/ipv6_test.o $(BUILD_DIR)/utils/ip_utils.o $(BUILD_DIR)/core/cli.o $(BUILD_DIR)/core/rules_mgr.o
+	$(CC) $(CFLAGS) $(filter %.o,$^) $(LDLIBS) -o $@
+test-ipv6: $(TEST_BIN)
+	./$(TEST_BIN)
+test-ipv6-kernel: $(BPF_OBJ) $(TEST_BIN)
+	./$(TEST_BIN) $(BPF_OBJ)
+
+test-logging:
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) test/network_log_test.c src/userspace/telemetry/network_log.c src/userspace/core/config.c -o $(BUILD_DIR)/network-log-test
+	./$(BUILD_DIR)/network-log-test
+	python3 test/test_network_logs.py
+
+print-config:
+	@echo "engine=$(ENGINE) timing=$(TIMING) logging=$(LOGGING) observability=$(OBSERVABILITY)"
+	@echo "output=$(BUILD_DIR)"
+	@echo "sources=$(USER_SRCS)"
+
+# Clean only this configuration; never discard other profile builds.
 clean:
 	rm -rf $(BUILD_DIR)
 
-test-logging: | $(BUILD_DIR)
-	$(CC) $(CFLAGS) test/network_log_test.c src/userspace/telemetry/network_log.c src/userspace/core/config.c -o $(BUILD_DIR)/network-log-test
-	./$(BUILD_DIR)/network-log-test
-	python3 test/test_network_logs.py
+-include $(USER_OBJS:.o=.d) $(BPF_OBJ:.o=.d) $(BUILD_DIR)/test/ipv6_test.d

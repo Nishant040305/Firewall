@@ -60,6 +60,7 @@ int populate_entries(int map_fd, int target_count)
         key.src_port = htons((uint16_t)(10000 + (i % 55000)));
         key.dst_port = htons(80);
         key.proto = IPPROTO_TCP;
+        key.family = FW_AF_INET;
 
         struct flow_entry entry = {
             .state = CONN_STATE_ESTABLISHED,

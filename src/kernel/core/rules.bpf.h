@@ -9,9 +9,10 @@
 #include <core/rules.h>
 #include "context.bpf.h"
 #include "maps.bpf.h"
+#include "timing.bpf.h"
 
 /* Evaluate Dynamic Firewall Rules against Packet 5-Tuple (Step 8) */
-static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
+static __always_inline int evaluate_rules_impl(struct pkt_ctx *pkt)
 {
     __u16 sport = bpf_ntohs(pkt->src_port);
     __u16 dport = bpf_ntohs(pkt->dst_port);
@@ -97,6 +98,20 @@ static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
     /* Default Policy: DROP if not explicitly allowed by rule */
     pkt->reason = REASON_DEFAULT_POLICY;
     return ACTION_DROP;
+}
+
+static __always_inline int evaluate_rules(struct pkt_ctx *pkt)
+{
+#if FW_TIMING
+    __u64 start = bpf_ktime_get_ns();
+#endif
+    int action = evaluate_rules_impl(pkt);
+#if FW_TIMING
+    __u64 ns = bpf_ktime_get_ns() - start;
+    record_step_time(STEP_LOOKUP_RULES, ns);
+    pkt->time_lookup_ns += ns;
+#endif
+    return action;
 }
 
 #endif /* __CORE_RULES_BPF_H__ */

@@ -22,6 +22,10 @@ struct pkt_ctx {
     __u8  conn_state;
     __u8  reason;
     __u8  new_flow;
+#if FW_TIMING
+    __u64 time_lookup_ns;
+    __u64 time_update_ns;
+#endif
     __u32 ifindex;
     __u32 rule_id;
     void *l4_hdr;

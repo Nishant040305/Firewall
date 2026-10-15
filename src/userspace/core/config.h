@@ -2,6 +2,7 @@
 #define __CORE_CONFIG_H__
 
 #include <linux/types.h>
+#include <core/build_config.h>
 
 enum traffic_direction {
     TRAFFIC_DIR_INGRESS = 1,

@@ -9,7 +9,9 @@
 #include "rules_mgr.h"
 #include "conntrack_mgr.h"
 #include "stats_mgr.h"
-#include "../protocols/protocol_registry.h"
+#if FW_TIMING
+#include "perf_mgr.h"
+#endif
 
 int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
 {
@@ -55,26 +57,41 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
         case CMD_RULE_LOAD:
             return rules_mgr_load_file(ctx->loader.rules_map_fd, ctx->opts.rules_path);
         case CMD_CONNTRACK_LIST:
+#if FW_ENGINE == FW_ENGINE_DUALMAP
+            puts("Established flows:");
+            if (conntrack_mgr_list(ctx->loader.conntrack_map_fd)) return -1;
+            puts("Half-open flows:");
+            return conntrack_mgr_list(ctx->loader.syn_map_fd);
+#else
             return conntrack_mgr_list(ctx->loader.conntrack_map_fd);
+#endif
         case CMD_CONNTRACK_FLUSH:
+#if FW_ENGINE == FW_ENGINE_DUALMAP
+            if (conntrack_mgr_flush(ctx->loader.syn_map_fd, -1)) return -1;
+#endif
             return conntrack_mgr_flush(ctx->loader.conntrack_map_fd, ctx->loader.flow_cache_map_fd);
         case CMD_STATS_SHOW:
             return stats_mgr_show(ctx->loader.stats_map_fd, ctx->opts.json_output);
         case CMD_STATS_RESET:
             return stats_mgr_reset(ctx->loader.stats_map_fd);
+#if FW_TIMING
+        case CMD_PERF_SHOW:
+            return perf_mgr_show(ctx->loader.perf_map_fd, ctx->opts.json_output);
+        case CMD_PERF_RESET:
+            return perf_mgr_reset(ctx->loader.perf_map_fd);
+#endif
         default:
             return 0;
         }
     }
 
     /* 3. Initialize Protocol Registry for Daemon / Monitor Mode */
-    protocol_registry_init();
 
     /* 4. Load & Validate Configuration */
     config_set_defaults(&ctx->config);
     const char *cfg_file = ctx->opts.config_path ? ctx->opts.config_path : "config/firewall.yaml";
     if (access(cfg_file, F_OK) == 0) {
-        config_load_file(cfg_file, &ctx->config);
+        if (config_load_file(cfg_file, &ctx->config) < 0) return -1;
     }
 
     /* Apply CLI overrides */
@@ -88,6 +105,9 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
             ctx->config.direction = TRAFFIC_DIR_EGRESS;
         } else if (strcasecmp(ctx->opts.direction, "both") == 0 || strcasecmp(ctx->opts.direction, "all") == 0) {
             ctx->config.direction = TRAFFIC_DIR_BOTH;
+        } else {
+            fprintf(stderr, "[-] Invalid traffic direction: %s\n", ctx->opts.direction);
+            return -1;
         }
     }
     if (ctx->opts.mode) {
@@ -97,6 +117,9 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
             ctx->config.mode = ATTACH_MODE_XDP;
         } else if (strcasecmp(ctx->opts.mode, "tc") == 0) {
             ctx->config.mode = ATTACH_MODE_TC;
+        } else {
+            fprintf(stderr, "[-] Invalid attach mode: %s\n", ctx->opts.mode);
+            return -1;
         }
     }
 
@@ -108,7 +131,7 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     config_dump(&ctx->config);
 
     /* 5. Load BPF Object & Attach Hook (XDP / TC) */
-    const char *bpf_obj = getenv("BPF_OBJ") ? getenv("BPF_OBJ") : "build/firewall.bpf.o";
+    const char *bpf_obj = getenv("BPF_OBJ") ? getenv("BPF_OBJ") : FW_DEFAULT_BPF_OBJ;
     printf("[*] Loading eBPF object: %s\n", bpf_obj);
     if (bpf_loader_init(&ctx->loader, bpf_obj, &ctx->config) < 0) {
         return -1;
@@ -117,15 +140,20 @@ int firewall_ctx_init(struct firewall_ctx *ctx, int argc, char **argv)
     /* 6. Load Initial Rules from config/rules.yaml if present (Step 8) */
     const char *rules_file = ctx->opts.rules_path ? ctx->opts.rules_path : "config/rules.yaml";
     if (access(rules_file, F_OK) == 0 && ctx->loader.rules_map_fd >= 0) {
-        rules_mgr_load_file(ctx->loader.rules_map_fd, rules_file);
+        if (rules_mgr_load_file(ctx->loader.rules_map_fd, rules_file) < 0) {
+            bpf_loader_cleanup(&ctx->loader);
+            return -1;
+        }
     }
 
     /* 7. Initialize Event Bus for Real-time 5-tuple Telemetry */
+#ifndef MINIMAL_OBSERVABILITY
     if (event_bus_init(&ctx->bus, ctx->loader.events_ringbuf_fd, ctx->loader.stats_map_fd, &ctx->config) < 0) {
         fprintf(stderr, "[-] Visibility initialization failed; detaching firewall\n");
         bpf_loader_cleanup(&ctx->loader);
         return -1;
     }
+#endif
 
     return 0;
 }
@@ -141,30 +169,56 @@ int firewall_ctx_run(struct firewall_ctx *ctx)
            ctx->config.interface,
            direction_to_str(ctx->config.direction),
            mode_to_str(ctx->loader.mode));
+#if FW_LOGGING
     printf("[*] Network evidence: %s (aggregated, not attack alerts). Press Ctrl+C to stop.\n\n",
-           ctx->config.telemetry.path);
+            ctx->config.telemetry.path);
+#else
+    puts("[*] Press Ctrl+C to stop.");
+#endif
 
     struct timespec tick;
     clock_gettime(CLOCK_MONOTONIC, &tick);
     time_t last_flush = tick.tv_sec;
+#if FW_ENGINE == FW_ENGINE_DUALMAP
+    time_t last_gc = tick.tv_sec;
+#endif
     while (ctx->running) {
         if (ctx->reload_requested) {
             ctx->reload_requested = 0;
             firewall_ctx_reload(ctx);
         }
         /* Poll and aggregate metadata events from RingBuffer. */
+#ifndef MINIMAL_OBSERVABILITY
         int rc = event_bus_poll(&ctx->bus, ctx->config.global.ringbuf_poll_timeout_ms);
         if (rc < 0 && rc != -EINTR) {
             fprintf(stderr, "[-] Network event polling failed\n");
             return 1;
         }
+#else
+        usleep(ctx->config.global.ringbuf_poll_timeout_ms * 1000);
+#endif
 
         /* Quiet periodic evidence and logging-health flush. */
         clock_gettime(CLOCK_MONOTONIC, &tick);
+#if FW_LOGGING
         if (tick.tv_sec - last_flush >= ctx->bus.log.window_sec) {
             event_bus_flush(&ctx->bus);
+#else
+        if (tick.tv_sec - last_flush >= ctx->config.global.stats_interval_sec) {
+#ifndef NO_OBSERVABILITY
+            stats_mgr_show(ctx->loader.stats_map_fd, 0);
+#endif
+#endif
             last_flush = tick.tv_sec;
         }
+#if FW_ENGINE == FW_ENGINE_DUALMAP
+        /* Reclaim the non-LRU established table independently of log cadence. */
+        if (tick.tv_sec > last_gc) {
+            conntrack_mgr_gc_sweep(ctx->loader.conntrack_map_fd);
+            conntrack_mgr_gc_sweep(ctx->loader.syn_map_fd);
+            last_gc = tick.tv_sec;
+        }
+#endif
     }
 
     return 0;
@@ -183,9 +237,11 @@ void firewall_ctx_reload(struct firewall_ctx *ctx)
         /* Hook and log destination changes require restart. */
         ctx->config.global = candidate.global;
         ctx->config.telemetry.aggregate_window_sec = candidate.telemetry.aggregate_window_sec;
+#if FW_LOGGING
         ctx->bus.log.window_sec = candidate.telemetry.aggregate_window_sec;
         ctx->bus.log.max_bytes = (size_t)candidate.telemetry.max_file_mb * 1024 * 1024;
         ctx->bus.log.console = candidate.telemetry.console_events;
+#endif
     }
     const char *rules_file = ctx->opts.rules_path ? ctx->opts.rules_path : "config/rules.yaml";
     if (access(rules_file, F_OK) == 0 && ctx->loader.rules_map_fd >= 0) {
@@ -197,10 +253,15 @@ void firewall_ctx_reload(struct firewall_ctx *ctx)
 
 void firewall_ctx_stop(struct firewall_ctx *ctx)
 {
-    if (ctx->opts.cmd != CMD_RUN) return;
+    if (ctx->opts.cmd != CMD_RUN) {
+        bpf_loader_cleanup(&ctx->loader);
+        return;
+    }
 
     printf("\n\n[*] Shutting down firewall...\n");
+#ifndef MINIMAL_OBSERVABILITY
     event_bus_cleanup(&ctx->bus);
+#endif
     bpf_loader_cleanup(&ctx->loader);
     printf("[+] Detached and unloaded successfully.\n");
 }

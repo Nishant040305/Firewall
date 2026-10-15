@@ -22,6 +22,19 @@ enum event_reason {
     REASON_MALFORMED = 4,
 };
 
+#if FW_TIMING
+/* Stable metric IDs across engines. Hash/cache metrics are FastCache-only. */
+enum op_step {
+    STEP_EXTRACTION, STEP_HASH_CAL, STEP_LOOKUP_CACHE,
+    STEP_LOOKUP_CONNTRACK, STEP_LOOKUP_RULES, STEP_LOOKUP_TOTAL,
+    STEP_UPDATE_CONNTRACK, STEP_UPDATE_STATS, STEP_UPDATE_RINGBUF,
+    STEP_UPDATE_TOTAL, STEP_TOTAL_PIPELINE, STEP_MAX_OPS,
+};
+struct step_metric {
+    __u64 total_time_ns, count, min_time_ns, max_time_ns;
+};
+#endif
+
 /* Metadata only: no application payloads or credentials. */
 struct packet_event {
     __u64 timestamp_ns;

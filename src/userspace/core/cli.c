@@ -14,6 +14,11 @@ void print_usage(const char *prog_name)
     printf("               FIREWALLCTL - Stateful eBPF/XDP Firewall Control Utility                 \n");
     printf("========================================================================================\n");
     printf("Usage:\n");
+    printf("Build: engine=%d timing=%d logging=%d observability=%d\n",
+           FW_ENGINE, FW_TIMING, FW_LOGGING, FW_OBSERVABILITY);
+#if FW_TIMING
+    printf("  %s perf show [--json] | perf reset             # Component timing\n", prog_name);
+#endif
     printf("  %s [OPTIONS] [interface]                      # Start firewall daemon & monitor\n", prog_name);
     printf("  %s rule list                                  # List dynamic firewall rules\n", prog_name);
     printf("  %s rule add [RULE OPTIONS]                    # Add a new firewall rule\n", prog_name);
@@ -62,6 +67,20 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
     opts->new_rule.flags = RULE_FLAG_ACTIVE;
 
     if (argc > 1) {
+#if FW_TIMING
+        if (!strcmp(argv[1], "perf")) {
+            if (argc == 2 || !strcmp(argv[2], "show")) {
+                opts->cmd = CMD_PERF_SHOW;
+                opts->json_output = argc > 3 && !strcmp(argv[3], "--json");
+                return 0;
+            }
+            if (!strcmp(argv[2], "reset")) {
+                opts->cmd = CMD_PERF_RESET;
+                return 0;
+            }
+            return -1;
+        }
+#endif
         if (strcmp(argv[1], "rule") == 0) {
             if (argc == 2 || strcmp(argv[2], "list") == 0) {
                 opts->cmd = CMD_RULE_LIST;
@@ -83,7 +102,10 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
                 opts->cmd = CMD_RULE_ADD;
                 for (int i = 3; i < argc; i++) {
                     if (strcmp(argv[i], "--action") == 0 && i + 1 < argc) {
-                        opts->new_rule.action = (strcasecmp(argv[++i], "drop") == 0) ? ACTION_DROP : ACTION_PASS;
+                        const char *action = argv[++i];
+                        if (!strcasecmp(action, "drop")) opts->new_rule.action = ACTION_DROP;
+                        else if (!strcasecmp(action, "allow") || !strcasecmp(action, "pass")) opts->new_rule.action = ACTION_PASS;
+                        else return -1;
                     } else if (strcmp(argv[i], "--proto") == 0 && i + 1 < argc) {
                         opts->new_rule.flags |= RULE_FLAG_PROTO;
                         const char *p = argv[++i];

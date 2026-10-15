@@ -7,6 +7,7 @@
 #include <core/types.h>
 #include "context.bpf.h"
 #include "maps.bpf.h"
+#include "timing.bpf.h"
 
 #ifdef NO_OBSERVABILITY
 #define inc_stat(counter_key) do {} while (0)
@@ -36,6 +37,9 @@ static __always_inline int flow_keys_equal(const struct flow_key *a, const struc
 /* Fast 5-Tuple hash calculation */
 static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
 {
+#if FW_TIMING
+    __u64 start = bpf_ktime_get_ns();
+#endif
     __u32 h = key->src_ip ^ key->dst_ip;
     #pragma unroll
     for (int i = 0; i < 4; i++)
@@ -46,6 +50,9 @@ static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
     h = (h ^ (h >> 16)) * 0x45d9f3b;
     h = (h ^ (h >> 16)) * 0x45d9f3b;
     h = h ^ (h >> 16);
+#if FW_TIMING
+    record_step_time(STEP_HASH_CAL, bpf_ktime_get_ns() - start);
+#endif
     return h;
 }
 
@@ -73,6 +80,7 @@ static __always_inline void make_reverse_flow_key(const struct pkt_ctx *pkt, str
 }
 
 /* Emit 5-tuple packet event to Userspace RingBuffer */
+#ifndef MINIMAL_OBSERVABILITY
 static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
 {
     struct packet_event *evt;
@@ -106,5 +114,6 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
 
     bpf_ringbuf_submit(evt, 0);
 }
+#endif
 
 #endif /* __CORE_HELPERS_BPF_H__ */

@@ -1,5 +1,20 @@
 # High-Performance Stateful eBPF/XDP Firewall
 
+## Combined selective-build branch
+
+On `feat/selective-build`, choose an engine and optional features at compilation:
+
+```bash
+make -j4 ENGINE=fastcache                       # One selected object, no timing/logging
+make -j4 ENGINE=stateful OBSERVABILITY=minimal
+make -j4 ENGINE=dualmap TIMING=1 LOGGING=1
+```
+
+Run binaries from `build/profiles/<engine>-t<timing>-l<logging>-<observability>/`.
+The old `build/fw-ctl` path is not refreshed by this branch.
+See [Selective compilation](docs/SELECTIVE_BUILD.md) for options, deployment,
+shared structure, optional tools and tests.
+
 A high-throughput, kernel-native stateful firewall built on **eBPF** and **XDP** on Linux, paired with a flexible userspace control plane (`firewallctl`).
 
 ---

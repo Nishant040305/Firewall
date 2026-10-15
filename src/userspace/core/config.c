@@ -34,7 +34,7 @@ void config_set_defaults(struct firewall_config *cfg)
 
     cfg->global.stats_interval_sec = 1;
     cfg->global.ringbuf_poll_timeout_ms = 100;
-    cfg->global.default_policy = 1; /* PASS */
+    cfg->global.default_policy = 0; /* Dataplane is default deny. */
     snprintf(cfg->telemetry.path, sizeof(cfg->telemetry.path), "telemetry/network.jsonl");
     cfg->telemetry.aggregate_window_sec = 30;
     cfg->telemetry.max_file_mb = 20;
@@ -154,10 +154,14 @@ int config_validate(const struct firewall_config *cfg)
     if (cfg->global.stats_interval_sec <= 0) {
         return -1;
     }
-    if (cfg->global.ringbuf_poll_timeout_ms < 1 || cfg->global.ringbuf_poll_timeout_ms > 10000 ||
+    if (cfg->global.ringbuf_poll_timeout_ms < 1 || cfg->global.ringbuf_poll_timeout_ms > 10000)
+        return -1;
+#if FW_LOGGING
+    if (
         !cfg->telemetry.path[0] || cfg->telemetry.aggregate_window_sec < 1 ||
         cfg->telemetry.aggregate_window_sec > 3600 || cfg->telemetry.max_file_mb < 1 ||
         cfg->telemetry.max_file_mb > 1024) return -1;
+#endif
     return 0;
 }
 
