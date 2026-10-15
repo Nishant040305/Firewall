@@ -29,6 +29,10 @@ struct packet_event {
     __u32 pkt_len;
     __u8  tcp_flags;
     __u8  pad[3];
+    struct ip6_addr src_ip6;
+    struct ip6_addr dst_ip6;
+    __u8 family;
+    __u8 family_pad[7];
 };
 
 #endif /* __CORE_TYPES_H__ */

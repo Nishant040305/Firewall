@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include "constants.h"
+#include "address.h"
 
 /* Connection States */
 enum conn_state {
@@ -26,6 +27,10 @@ struct flow_key {
     __u16 dst_port;  /* Network byte order */
     __u8  proto;     /* IP protocol number */
     __u8  pad[3];
+    struct ip6_addr src_ip6;
+    struct ip6_addr dst_ip6;
+    __u8 family;
+    __u8 family_pad[3];
 };
 
 /* Stateful Connection Value */
@@ -43,7 +48,7 @@ struct flow_entry {
 
 /* L1 Per-CPU Direct-Indexed Flow Cache Entry */
 struct flow_cache_entry {
-    struct flow_key key;     /* 16 bytes: 5-tuple flow key */
+    struct flow_key key;     /* Dual-stack 5-tuple flow key */
     __u32 state;             /* enum conn_state */
     __u32 gen_id;            /* Generation / epoch ID */
     __u64 last_seen_ns;      /* Most recent packet timestamp */

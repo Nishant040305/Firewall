@@ -41,3 +41,28 @@
   dport: 22
   action: allow
   desc: "SSH Access"
+
+- name: "Allow IPv6 HTTP"
+  proto: tcp
+  dst: fd10:10:2::10/128
+  dport: 80
+  action: allow
+
+- name: "Allow IPv6 iperf3 TCP"
+  proto: tcp
+  dst: fd10:10:2::10/128
+  dport: 5201
+  action: allow
+
+- name: "Allow IPv6 iperf3 UDP"
+  proto: udp
+  dst: fd10:10:2::10/128
+  dport: 5201
+  action: allow
+
+# Explicit ICMPv6 policy permits echo and errors (including Packet Too Big).
+# Only validated local Neighbor Discovery is automatically exempt.
+- name: "Allow ICMPv6 control and ping"
+  proto: icmpv6
+  family: ipv6
+  action: allow

@@ -7,9 +7,9 @@
 
 static void icmp_format_event(const struct packet_event *evt, char *buf, size_t len)
 {
-    char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
-    ip_to_str(evt->src_ip, src, sizeof(src));
-    ip_to_str(evt->dst_ip, dst, sizeof(dst));
+    char src[INET6_ADDRSTRLEN], dst[INET6_ADDRSTRLEN];
+    address_to_str(evt->family, evt->src_ip, &evt->src_ip6, src, sizeof(src));
+    address_to_str(evt->family, evt->dst_ip, &evt->dst_ip6, dst, sizeof(dst));
 
     const char *dir_str = (evt->direction == DIR_INGRESS) ? "IN " :
                           (evt->direction == DIR_EGRESS)  ? "OUT" : "---";
