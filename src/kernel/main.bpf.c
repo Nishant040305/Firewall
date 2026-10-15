@@ -217,7 +217,8 @@ int tc_ingress_prog(struct __sk_buff *skb)
     struct pkt_ctx pkt;
 
     if (pkt_ctx_init_skb(&pkt, skb, DIR_INGRESS) < 0) {
-        return TC_ACT_OK;
+        inc_stat(STAT_DROPPED_MALFORMED);
+        return TC_ACT_SHOT;
     }
 
     int decision = process_packet(&pkt);
@@ -234,7 +235,8 @@ int tc_egress_prog(struct __sk_buff *skb)
     struct pkt_ctx pkt;
 
     if (pkt_ctx_init_skb(&pkt, skb, DIR_EGRESS) < 0) {
-        return TC_ACT_OK;
+        inc_stat(STAT_DROPPED_MALFORMED);
+        return TC_ACT_SHOT;
     }
 
     int decision = process_packet(&pkt);

@@ -60,7 +60,7 @@ BPF_OBJ := $(BUILD_DIR)/firewall.bpf.o
 USER_BIN := $(BUILD_DIR)/fw-ctl
 TEST_BIN := $(BUILD_DIR)/ipv6-test
 .DEFAULT_GOAL := all
-.PHONY: all bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging print-config FORCE
+.PHONY: all bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging test-tc-context print-config FORCE
 
 # Changing compiler/flags must invalidate this profile, but an unchanged
 # invocation leaves timestamps alone and performs no compilation.
@@ -108,6 +108,11 @@ test-ipv6: $(TEST_BIN)
 	./$(TEST_BIN)
 test-ipv6-kernel: $(BPF_OBJ) $(TEST_BIN)
 	./$(TEST_BIN) $(BPF_OBJ)
+
+test-tc-context:
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc/kernel test/tc_context_test.c -o $(BUILD_DIR)/tc-context-test
+	./$(BUILD_DIR)/tc-context-test
 
 test-logging:
 	@mkdir -p $(BUILD_DIR)

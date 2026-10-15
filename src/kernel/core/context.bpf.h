@@ -84,6 +84,14 @@ static __always_inline int pkt_ctx_init(struct pkt_ctx *pctx, struct xdp_md *ctx
 /* Initialize packet context from TC __sk_buff (Ingress or Egress) */
 static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_buff *skb, __u8 direction)
 {
+    /* TC data_end covers only the linear head, unlike skb->len. Our shared
+     * IP parsers validate the complete datagram, so pull fragmented payload
+     * into the linear buffer first. The helper invalidates packet pointers:
+     * read data/data_end only after it returns. Avoid copying linear packets. */
+    if ((__u32)(skb->data_end - skb->data) < skb->len &&
+        bpf_skb_pull_data(skb, skb->len) < 0)
+        return -1;
+
     pctx->data = (void *)(long)skb->data;
     pctx->data_end = (void *)(long)skb->data_end;
     pctx->pkt_len = skb->len;
