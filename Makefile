@@ -95,11 +95,11 @@ $(USER_BIN): $(USER_OBJS) | $(BUILD_DIR)
 
 tools: $(BENCH_BIN) $(PERF_BENCH_BIN)
 
-$(BENCH_BIN): $(BENCH_SRC) | $(BUILD_DIR)
+$(BENCH_BIN): $(BENCH_SRC) $(USER_DEPS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $< -lbpf -lm -o $@
 
-$(PERF_BENCH_BIN): $(PERF_BENCH_SRC) src/userspace/core/stats_mgr.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $^ -lbpf -lelf -lz -lm -o $@
+$(PERF_BENCH_BIN): $(PERF_BENCH_SRC) src/userspace/core/stats_mgr.c $(USER_DEPS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(PERF_BENCH_SRC) src/userspace/core/stats_mgr.c -lbpf -lelf -lz -lm -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
