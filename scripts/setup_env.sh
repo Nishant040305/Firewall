@@ -29,32 +29,42 @@ if [ "$RESTART_INCUS" -eq 1 ]; then
 fi
 
 echo "[+] Configuring Incus virtual networks (enabling NAT for package installation)..."
-$INCUS_CMD network create incus-mgmt ipv4.address=10.10.99.1/24 ipv4.nat=true ipv6.address=none 2>/dev/null || $INCUS_CMD network set incus-mgmt ipv4.nat=true 2>/dev/null || true
-$INCUS_CMD network create incus-untrust ipv4.address=10.10.1.1/24 ipv4.nat=true ipv6.address=none 2>/dev/null || $INCUS_CMD network set incus-untrust ipv4.nat=true 2>/dev/null || true
-$INCUS_CMD network create incus-protect ipv4.address=10.10.2.1/24 ipv4.nat=true ipv6.address=none 2>/dev/null || $INCUS_CMD network set incus-protect ipv4.nat=true 2>/dev/null || true
+for segment in mgmt:99 untrust:1 protect:2; do
+    name="incus-${segment%:*}"
+    subnet="${segment#*:}"
+    $INCUS_CMD network show "$name" >/dev/null 2>&1 ||
+        $INCUS_CMD network create "$name" ipv4.address="10.10.$subnet.1/24" ipv4.nat=true ipv6.address="fd10:10:$subnet::1/64" ipv6.nat=false
+    # Update existing IPv4-only labs as well as newly created networks.
+    $INCUS_CMD network set "$name" ipv4.nat=true ipv6.address="fd10:10:$subnet::1/64" ipv6.nat=false ipv6.dhcp=true ipv6.dhcp.stateful=true
+done
 
 echo "[+] Launching containers..."
 # Untrusted network (Client & Attacker)
 $INCUS_CMD init "$IMAGE" attacker --network incus-untrust 2>/dev/null || true
 $INCUS_CMD config device set attacker eth0 ipv4.address 10.10.1.10 2>/dev/null || true
+$INCUS_CMD config device set attacker eth0 ipv6.address fd10:10:1::10
 $INCUS_CMD start attacker 2>/dev/null || true
 
 $INCUS_CMD init "$IMAGE" client --network incus-untrust 2>/dev/null || true
 $INCUS_CMD config device set client eth0 ipv4.address 10.10.1.20 2>/dev/null || true
+$INCUS_CMD config device set client eth0 ipv6.address fd10:10:1::20
 $INCUS_CMD start client 2>/dev/null || true
 
 # Protected network (Server)
 $INCUS_CMD init "$IMAGE" webserver --network incus-protect 2>/dev/null || true
 $INCUS_CMD config device set webserver eth0 ipv4.address 10.10.2.10 2>/dev/null || true
+$INCUS_CMD config device set webserver eth0 ipv6.address fd10:10:2::10
 $INCUS_CMD start webserver 2>/dev/null || true
 
 # Management network (Admin workstation)
 $INCUS_CMD init "$IMAGE" admin --network incus-mgmt 2>/dev/null || true
 $INCUS_CMD config device set admin eth0 ipv4.address 10.10.99.10 2>/dev/null || true
+$INCUS_CMD config device set admin eth0 ipv6.address fd10:10:99::10
 $INCUS_CMD start admin 2>/dev/null || true
 
 # Ensure host forwarding and firewall allow container traffic
 sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+sudo sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 sudo iptables -P FORWARD ACCEPT 2>/dev/null || true
 if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active firewalld >/dev/null 2>&1; then
     echo "[+] Configuring firewalld trusted zone for Incus bridge interfaces..."

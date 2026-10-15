@@ -12,6 +12,7 @@
 /* IP Protocols */
 #define PROTO_ANY  0
 #define PROTO_ICMP 1
+#define PROTO_ICMPV6 58
 #define PROTO_TCP  6
 #define PROTO_UDP  17
 

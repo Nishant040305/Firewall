@@ -59,6 +59,10 @@ struct packet_event {
     __u32 time_lookup_ns;  /* State table & rule lookup */
     __u32 time_update_ns;  /* State, stats & ringbuf update */
     __u32 time_total_ns;   /* Full packet traversal latency */
+    struct ip6_addr src_ip6;
+    struct ip6_addr dst_ip6;
+    __u8 family;
+    __u8 family_pad[7];
 };
 
 #endif /* __CORE_TYPES_H__ */
