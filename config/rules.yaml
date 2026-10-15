@@ -2,67 +2,24 @@
 #         Firewall Policy Rules (Step 8)
 # ==========================================================
 # Rules are evaluated sequentially. First match applies.
-# Matched connections are tracked statefully in eBPF.
+# Put specific DROP rules above the final catch-all ALLOW rule.
+# No traffic is blocked by policy unless an active DROP rule matches.
+# Packet validation and connection-state checks still apply; established
+# tracked connections can bypass rule evaluation until their state expires.
+# The catch-all is required: the kernel drops traffic if no rule matches,
+# regardless of default_policy in firewall.yaml.
 
-- name: "Allow HTTP Web Traffic"
-  proto: tcp
-  dst: 10.10.2.10
-  dport: 80
-  action: allow
-  desc: "Nginx HTTP"
+# Example block rule (inactive until uncommented):
+# - name: "Block TCP port 23"
+#   proto: tcp
+#   dport: 23
+#   action: drop
+#   desc: "Block Telnet"
 
-- name: "Allow iperf3 Benchmark"
-  proto: tcp
-  dst: 10.10.2.10
-  dport: 5201
+# Keep this rule last. No address or port restriction: IPv4 and IPv6,
+# ingress and egress, and all IP protocols match.
+- name: "Allow all other traffic"
+  proto: any
+  family: any
   action: allow
-  desc: "iperf3 Throughput"
-
-- name: "Allow iperf3 UDP Benchmark"
-  proto: udp
-  dst: 10.10.2.10
-  dport: 5201
-  action: allow
-  desc: "iperf3 UDP Throughput"
-
-- name: "Allow ICMP Ping"
-  proto: icmp
-  action: allow
-  desc: "ICMP Echo"
-
-- name: "Allow DNS Queries"
-  proto: udp
-  dport: 53
-  action: allow
-  desc: "DNS Queries"
-
-- name: "Allow SSH Access"
-  proto: tcp
-  dport: 22
-  action: allow
-  desc: "SSH Access"
-
-- name: "Allow IPv6 HTTP"
-  proto: tcp
-  dst: fd10:10:2::10/128
-  dport: 80
-  action: allow
-
-- name: "Allow IPv6 iperf3 TCP"
-  proto: tcp
-  dst: fd10:10:2::10/128
-  dport: 5201
-  action: allow
-
-- name: "Allow IPv6 iperf3 UDP"
-  proto: udp
-  dst: fd10:10:2::10/128
-  dport: 5201
-  action: allow
-
-# Explicit ICMPv6 policy permits echo and errors (including Packet Too Big).
-# Only validated local Neighbor Discovery is automatically exempt.
-- name: "Allow ICMPv6 control and ping"
-  proto: icmpv6
-  family: ipv6
-  action: allow
+  desc: "Default allow"
