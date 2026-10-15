@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include "cli.h"
 #include <core/constants.h>
+#include "../utils/ip_utils.h"
 
 void print_usage(const char *prog_name)
 {
@@ -34,7 +35,8 @@ void print_usage(const char *prog_name)
 
     printf("Rule Add Options:\n");
     printf("  --action <allow|drop>        Rule action (default: allow)\n");
-    printf("  --proto <tcp|udp|icmp|any>   IP protocol\n");
+    printf("  --proto <tcp|udp|icmp|icmpv6|any> IP protocol\n");
+    printf("  --family <ipv4|ipv6|any>     Address family (inferred from addresses)\n");
     printf("  --src <ip/cidr>              Source IP / CIDR\n");
     printf("  --dst <ip/cidr>              Destination IP / CIDR\n");
     printf("  --sport <port|range>         Source port or range (e.g. 80, 1000-2000)\n");
@@ -88,27 +90,28 @@ int parse_cli_args(int argc, char **argv, struct firewall_options *opts)
                         if (strcasecmp(p, "tcp") == 0) opts->new_rule.proto = PROTO_TCP;
                         else if (strcasecmp(p, "udp") == 0) opts->new_rule.proto = PROTO_UDP;
                         else if (strcasecmp(p, "icmp") == 0) opts->new_rule.proto = PROTO_ICMP;
-                        else opts->new_rule.proto = PROTO_ANY;
+                        else if (strcasecmp(p, "icmpv6") == 0) opts->new_rule.proto = PROTO_ICMPV6;
+                        else if (strcasecmp(p, "any") == 0) opts->new_rule.proto = PROTO_ANY;
+                        else return -1;
+                    } else if (strcmp(argv[i], "--family") == 0 && i + 1 < argc) {
+                        if (rule_set_family(&opts->new_rule, argv[++i])) return -1;
                     } else if (strcmp(argv[i], "--src") == 0 && i + 1 < argc) {
-                        opts->new_rule.flags |= RULE_FLAG_SRC_IP;
-                        opts->new_rule.src_ip = inet_addr(argv[++i]);
-                        opts->new_rule.src_mask = 0xFFFFFFFF;
+                        if (rule_set_address(&opts->new_rule, argv[++i], 1)) return -1;
                     } else if (strcmp(argv[i], "--dst") == 0 && i + 1 < argc) {
-                        opts->new_rule.flags |= RULE_FLAG_DST_IP;
-                        opts->new_rule.dst_ip = inet_addr(argv[++i]);
-                        opts->new_rule.dst_mask = 0xFFFFFFFF;
+                        if (rule_set_address(&opts->new_rule, argv[++i], 0)) return -1;
                     } else if (strcmp(argv[i], "--dport") == 0 && i + 1 < argc) {
-                        const char *val = argv[++i];
-                        const char *dash = strchr(val, '-');
-                        if (dash) {
-                            opts->new_rule.dst_port_min = atoi(val);
-                            opts->new_rule.dst_port_max = atoi(dash + 1);
-                        } else {
-                            opts->new_rule.dst_port_min = atoi(val);
-                            opts->new_rule.dst_port_max = atoi(val);
-                        }
+                        if (parse_port_range(argv[++i], &opts->new_rule.dst_port_min,
+                                             &opts->new_rule.dst_port_max)) return -1;
+                        opts->new_rule.flags |= RULE_FLAG_DST_PORT;
+                    } else if (strcmp(argv[i], "--sport") == 0 && i + 1 < argc) {
+                        if (parse_port_range(argv[++i], &opts->new_rule.src_port_min,
+                                             &opts->new_rule.src_port_max)) return -1;
+                        opts->new_rule.flags |= RULE_FLAG_SRC_PORT;
                     } else if (strcmp(argv[i], "--desc") == 0 && i + 1 < argc) {
                         snprintf(opts->new_rule.description, sizeof(opts->new_rule.description), "%s", argv[++i]);
+                    } else {
+                        fprintf(stderr, "Invalid or incomplete rule option: %s\n", argv[i]);
+                        return -1;
                     }
                 }
                 return 0;

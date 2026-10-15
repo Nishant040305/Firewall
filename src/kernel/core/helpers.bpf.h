@@ -21,7 +21,35 @@ static __always_inline void inc_stat(__u32 counter_key)
 }
 #endif
 
-/* Construct forward 5-tuple flow key */
+/* Compare every address/family word; hash collisions must never authorize flows. */
+static __always_inline int flow_keys_equal(const struct flow_key *a, const struct flow_key *b)
+{
+    const __u32 *w1 = (const __u32 *)a;
+    const __u32 *w2 = (const __u32 *)b;
+    int equal = 1;
+    #pragma unroll
+    for (int i = 0; i < sizeof(*a) / sizeof(__u32); i++)
+        equal &= w1[i] == w2[i];
+    return equal;
+}
+
+/* Fast 5-Tuple hash calculation */
+static __always_inline __u32 calc_flow_hash(const struct flow_key *key)
+{
+    __u32 h = key->src_ip ^ key->dst_ip;
+    #pragma unroll
+    for (int i = 0; i < 4; i++)
+        h = (h * 16777619u) ^ key->src_ip6.words[i] ^ key->dst_ip6.words[i];
+    h ^= key->family;
+    h ^= ((__u32)key->src_port << 16) | key->dst_port;
+    h ^= key->proto;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = (h ^ (h >> 16)) * 0x45d9f3b;
+    h = h ^ (h >> 16);
+    return h;
+}
+
+/* Construct forward 5-tuple flow key (direct struct copy from pre-populated pkt->flow) */
 static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow_key *key)
 {
     key->src_ip = pkt->src_ip;
@@ -32,6 +60,10 @@ static __always_inline void make_flow_key(const struct pkt_ctx *pkt, struct flow
     key->pad[0] = 0;
     key->pad[1] = 0;
     key->pad[2] = 0;
+    key->src_ip6 = pkt->src_ip6;
+    key->dst_ip6 = pkt->dst_ip6;
+    key->family = pkt->family;
+    __builtin_memset(key->family_pad, 0, sizeof(key->family_pad));
 }
 
 /* Construct reverse 5-tuple flow key */
@@ -45,6 +77,10 @@ static __always_inline void make_reverse_flow_key(const struct pkt_ctx *pkt, str
     key->pad[0] = 0;
     key->pad[1] = 0;
     key->pad[2] = 0;
+    key->src_ip6 = pkt->dst_ip6;
+    key->dst_ip6 = pkt->src_ip6;
+    key->family = pkt->family;
+    __builtin_memset(key->family_pad, 0, sizeof(key->family_pad));
 }
 
 /* Emit 5-tuple packet event to Userspace RingBuffer */
@@ -71,6 +107,10 @@ static __always_inline void emit_packet_event(const struct pkt_ctx *pkt)
     evt->pad[0] = 0;
     evt->pad[1] = 0;
     evt->pad[2] = 0;
+    evt->src_ip6 = pkt->src_ip6;
+    evt->dst_ip6 = pkt->dst_ip6;
+    evt->family = pkt->family;
+    __builtin_memset(evt->family_pad, 0, sizeof(evt->family_pad));
 
     bpf_ringbuf_submit(evt, 0);
 }

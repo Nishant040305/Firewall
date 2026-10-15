@@ -11,6 +11,7 @@
 struct pkt_ctx {
     void *data;
     void *data_end;
+    void *l3_end;
     __u32 pkt_len;
     __u16 eth_proto;
     __u8  direction;
@@ -18,14 +19,28 @@ struct pkt_ctx {
     struct ethhdr *eth;
     struct iphdr  *iph;
     void *l4_hdr;
-    __u32 src_ip;
-    __u32 dst_ip;
-    __u16 src_port;
-    __u16 dst_port;
     __u8  tcp_flags;
     __u8  action;
     __u8  conn_state;
     __u32 rule_id;
+    __u8 icmp_type;
+    __u8 icmp_code;
+    __u8 hop_limit;
+    union {
+        struct flow_key flow;
+        struct {
+            __u32 src_ip;
+            __u32 dst_ip;
+            __u16 src_port;
+            __u16 dst_port;
+            __u8 flow_proto;
+            __u8 flow_pad[3];
+            struct ip6_addr src_ip6;
+            struct ip6_addr dst_ip6;
+            __u8 family;
+            __u8 family_pad[3];
+        };
+    };
 };
 
 /* Initialize packet context from raw XDP metadata (Ingress only) */
@@ -48,6 +63,11 @@ static __always_inline int pkt_ctx_init_xdp(struct pkt_ctx *pctx, struct xdp_md 
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->tcp_flags = 0;
+    pctx->flow = (struct flow_key){};
+    pctx->flow.pad[0] = 0;
+    pctx->flow.pad[1] = 0;
+    pctx->flow.pad[2] = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
@@ -81,6 +101,11 @@ static __always_inline int pkt_ctx_init_skb(struct pkt_ctx *pctx, struct __sk_bu
     pctx->action = ACTION_PASS;
     pctx->conn_state = CONN_STATE_INVALID;
     pctx->rule_id = 0;
+    pctx->tcp_flags = 0;
+    pctx->flow = (struct flow_key){};
+    pctx->flow.pad[0] = 0;
+    pctx->flow.pad[1] = 0;
+    pctx->flow.pad[2] = 0;
 
     if (pctx->data + sizeof(struct ethhdr) > pctx->data_end) {
         return -1;
