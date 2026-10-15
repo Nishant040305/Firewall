@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include "constants.h"
+#include "address.h"
 
 /* 5-Tuple Firewall Rule Definition */
 struct fw_rule {
@@ -21,6 +22,12 @@ struct fw_rule {
     __u64 hit_count;    /* Matched packet count */
     __u64 byte_count;   /* Matched byte count */
     char  description[32];
+    struct ip6_addr src_ip6;
+    struct ip6_addr src_mask6;
+    struct ip6_addr dst_ip6;
+    struct ip6_addr dst_mask6;
+    __u8 family; /* ANY for protocol/port-only rules; address rules infer family */
+    __u8 family_pad[7];
 };
 
 #endif /* __CORE_RULES_H__ */

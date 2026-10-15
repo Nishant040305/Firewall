@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include "constants.h"
+#include "address.h"
 
 /* Connection States */
 enum conn_state {
@@ -26,6 +27,10 @@ struct flow_key {
     __u16 dst_port;  /* Network byte order */
     __u8  proto;     /* IP protocol number */
     __u8  pad[3];
+    struct ip6_addr src_ip6;
+    struct ip6_addr dst_ip6;
+    __u8 family;
+    __u8 family_pad[3];
 };
 
 /* Stateful Connection Value */

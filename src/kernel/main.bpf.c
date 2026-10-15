@@ -20,6 +20,7 @@
 
 #include "protocols/proto_eth.bpf.h"
 #include "protocols/proto_ipv4.bpf.h"
+#include "protocols/proto_ipv6.bpf.h"
 #include "protocols/proto_tcp.bpf.h"
 #include "protocols/proto_udp.bpf.h"
 #include "protocols/proto_icmp.bpf.h"
@@ -48,8 +49,8 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         return ACTION_PASS;
     }
 
-    /* Pass non-IPv4 traffic (e.g. ARP, IPv6 Neighbor Discovery) directly */
-    if (pkt->eth_proto != ETH_P_IP) {
+    /* ARP and other non-IP traffic remain outside IP policy. */
+    if (pkt->eth_proto != ETH_P_IP && pkt->eth_proto != ETH_P_IPV6) {
         pkt->time_extract_ns = (__u32)(bpf_ktime_get_ns() - t_start);
         pkt->time_total_ns = pkt->time_extract_ns;
         record_step_time(STEP_EXTRACTION, pkt->time_extract_ns);
@@ -58,7 +59,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     }
 
     /* 2. L3: IPv4 Parsing */
-    if (parse_ipv4(pkt) < 0) {
+    if ((pkt->eth_proto == ETH_P_IPV6 ? parse_ipv6(pkt) : parse_ipv4(pkt)) < 0) {
         pkt->time_extract_ns = (__u32)(bpf_ktime_get_ns() - t_start);
         __u64 t_stat_start = bpf_ktime_get_ns();
         inc_stat(STAT_DROPPED_MALFORMED);
@@ -116,6 +117,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
         }
         break;
     case IPPROTO_ICMP:
+    case IPPROTO_ICMPV6:
         if (parse_icmp(pkt) < 0) {
             pkt->time_extract_ns = (__u32)(bpf_ktime_get_ns() - t_start);
             record_step_time(STEP_EXTRACTION, pkt->time_extract_ns);
@@ -125,7 +127,13 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
             pkt->time_extract_ns = (__u32)(bpf_ktime_get_ns() - t_start);
             record_step_time(STEP_EXTRACTION, pkt->time_extract_ns);
             inc_stat(STAT_ICMP_PACKETS);
-            decision = process_icmp_state(pkt, now);
+            now = bpf_ktime_get_ns();
+            if (valid_neighbor_discovery(pkt))
+                decision = ACTION_PASS;
+            else if (pkt->proto == IPPROTO_ICMPV6 && pkt->icmp_type != 128 && pkt->icmp_type != 129)
+                decision = evaluate_rules(pkt);
+            else
+                decision = process_icmp_state(pkt, now);
         }
         break;
     default:
@@ -155,6 +163,7 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
     pkt->time_update_ns += (__u32)dec_stat_dur;
 
 #ifndef MINIMAL_OBSERVABILITY
+    pkt->action = decision;
     /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
     if (decision == ACTION_DROP ||
         pkt->conn_state == CONN_STATE_SYN_SENT ||
