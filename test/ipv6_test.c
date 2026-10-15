@@ -8,10 +8,12 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <core/types.h>
 #include "utils/ip_utils.h"
 #include "core/cli.h"
+#include "core/rules_mgr.h"
 
 static void unit_tests(void)
 {
@@ -111,6 +113,18 @@ static void dataplane_tests(const char *path)
     assert(!bpf_object__load(obj)); /* Verifies XDP and both TC programs. */
     int fd = bpf_program__fd(bpf_object__find_program_by_name(obj, "xdp_firewall_prog"));
     int map = bpf_map__fd(bpf_object__find_map_by_name(obj, "rules_map"));
+    assert(rules_mgr_load_file(map, "config/rules.yaml") > 0);
+    /* Loading must preserve IPv6 family, address and port flags. */
+    int found_ipv6_http = 0;
+    for (__u32 i = 0; i < MAX_RULE_ENTRIES; i++) {
+        struct fw_rule loaded;
+        assert(!bpf_map_lookup_elem(map, &i, &loaded));
+        if (loaded.family == FW_AF_INET6 && loaded.proto == PROTO_TCP &&
+            loaded.dst_port_min == 80 && (loaded.flags & RULE_FLAG_DST_PORT))
+            found_ipv6_http = 1;
+    }
+    assert(found_ipv6_http);
+    assert(!rules_mgr_flush(map));
     struct fw_rule r = {.flags = RULE_FLAG_ACTIVE | RULE_FLAG_PROTO | RULE_FLAG_DST_PORT,
                         .proto = PROTO_TCP, .action = ACTION_PASS,
                         .dst_port_min = 80, .dst_port_max = 80};
@@ -183,6 +197,42 @@ static void dataplane_tests(const char *path)
     len = packet(4, IPPROTO_TCP, 0, 2, 80);
     ((struct iphdr *)(frame + 14))->frag_off = htons(0x2000);
     run(fd, len, 1, "IPv4 fragment regression");
+    r = (struct fw_rule){.flags = RULE_FLAG_ACTIVE | RULE_FLAG_PROTO | RULE_FLAG_DST_PORT,
+                         .proto = PROTO_TCP, .action = ACTION_PASS,
+                         .dst_port_min = 443, .dst_port_max = 443};
+    assert(!rule_set_address(&r, "fd10:10:2::/64", 0));
+    key = MAX_RULE_ENTRIES - 1;
+    assert(!bpf_map_update_elem(map, &key, &r, BPF_ANY));
+    run(fd, packet(6, IPPROTO_TCP, 0, 2, 443), 2, "last rule slot evaluated");
+    len = packet(6, IPPROTO_TCP, 0, 2, 443);
+    ((struct ipv6hdr *)(frame + 14))->payload_len = htons(8);
+    run(fd, len, 1, "Ethernet padding cannot supply transport header");
+    len = packet(6, IPPROTO_TCP, 0, 2, 443);
+    ((struct tcphdr *)(frame + 54))->doff = 4;
+    run(fd, len, 1, "invalid TCP data offset");
+    len = packet(6, IPPROTO_UDP, 0, 0, 5201);
+    ((struct udphdr *)(frame + 54))->len = htons(7);
+    run(fd, len, 1, "invalid UDP length");
+    /* An echo session must not authorize an otherwise denied ICMPv6 error. */
+    r = (struct fw_rule){0};
+    key = 2;
+    assert(!bpf_map_update_elem(map, &key, &r, BPF_ANY));
+    run(fd, packet(6, IPPROTO_ICMPV6, 0, 2, 0), 1, "ICMPv6 error does not reuse echo state");
+    struct bpf_map *perf = bpf_object__find_map_by_name(obj, "perf_map");
+    if (perf && !strstr(path, "zero_obs")) {
+        int cpus = libbpf_num_possible_cpus();
+        struct metric { __u64 total, count, min, max; };
+        struct metric *values = calloc(cpus, sizeof(*values));
+        assert(values);
+        __u64 count = 0;
+        for (__u32 i = 0; i < bpf_map__max_entries(perf); i++) {
+            assert(!bpf_map_lookup_elem(bpf_map__fd(perf), &i, values));
+            for (int cpu = 0; cpu < cpus; cpu++) count += values[cpu].count;
+        }
+        assert(count > 0);
+        free(values);
+        puts("Component timing metrics populated for dual-stack packets");
+    }
     printf("%d XDP/TC dual-stack dataplane tests passed (%s)\n", tests, path);
     bpf_object__close(obj);
 }
