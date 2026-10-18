@@ -8,6 +8,88 @@
 #include <core/stats.h>
 #include <core/rules.h>
 #include <core/conntrack.h>
+#if FW_CONN_LIMIT
+#include <core/connection_limit.h>
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32); /* Selected ingress interface. */
+    __type(value, __u32); /* Maximum concurrent TCP connections per source. */
+    __uint(max_entries, 16);
+} conn_limit_cfg SEC(".maps");
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, __u32);
+    __type(value, __u32);
+    __uint(max_entries, 1);
+} conn_limit_on SEC(".maps");
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, struct connection_source);
+    __type(value, struct connection_source_slots);
+    __uint(max_entries, CONN_LIMIT_SOURCES);
+} conn_limit_src SEC(".maps");
+/* This is only an accelerator; source slots are authoritative after eviction. */
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, struct flow_key);
+    __type(value, struct connection_hint);
+    __uint(max_entries, CONN_LIMIT_HINTS);
+} conn_limit_hint SEC(".maps");
+/* Preallocated all-zero template avoids placing a large value on the BPF stack. */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, __u32);
+    __type(value, struct connection_zero_template);
+    __uint(max_entries, 1);
+} conn_limit_zero SEC(".maps");
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, __u32);
+    __type(value, struct connection_scratch);
+    __uint(max_entries, 1);
+} conn_limit_tmp SEC(".maps");
+#endif
+#if FW_ANTI_SPOOF
+#include <core/anti_spoof.h>
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, __u32);
+    __uint(max_entries, ANTI_SPOOF_MAX_SCOPES);
+} anti_spoof_scopes SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+    __type(key, struct anti_spoof_key);
+    __type(value, __u32);
+    __uint(max_entries, ANTI_SPOOF_MAX_PREFIXES);
+} anti_spoof_prefix SEC(".maps");
+#endif
+#if FW_RATE_LIMIT
+#include <core/rate_limit.h>
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, struct syn_rate_config);
+    __uint(max_entries, RATE_SCOPE_ENTRIES);
+} syn_rate_config SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, struct rate_bucket);
+    __uint(max_entries, RATE_SCOPE_ENTRIES);
+} syn_rate_total SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, struct rate_source_key);
+    __type(value, struct rate_bucket);
+    __uint(max_entries, RATE_SOURCE_ENTRIES);
+} syn_rate_sources SEC(".maps");
+#endif
 
 /* Per-CPU Statistics for High-Throughput */
 #ifndef NO_OBSERVABILITY

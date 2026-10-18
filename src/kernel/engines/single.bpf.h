@@ -79,6 +79,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             return ACTION_DROP;
         }
 
+#if FW_CONN_LIMIT
+        if (!connection_limit_admit(pkt, now))
+            return ACTION_DROP;
+#endif
         /* Create forward flow entry */
         struct flow_entry new_entry = {
             .state = CONN_STATE_SYN_SENT,
@@ -91,7 +95,8 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, fwd_key, &new_entry, BPF_ANY);
+        if (bpf_map_update_elem(&conntrack_map, fwd_key, &new_entry, BPF_ANY))
+            return ACTION_DROP;
 
         /* Create reverse flow entry awaiting SYN-ACK (LAZY ALLOCATION) */
         struct flow_key rev_key;
@@ -107,7 +112,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             .bytes_reverse = 0,
             .timeout_ns = TCP_SYN_TIMEOUT_NS,
         };
-        bpf_map_update_elem(&conntrack_map, &rev_key, &rev_entry, BPF_ANY);
+        if (bpf_map_update_elem(&conntrack_map, &rev_key, &rev_entry, BPF_ANY)) {
+            bpf_map_delete_elem(&conntrack_map, fwd_key);
+            return ACTION_DROP;
+        }
 
         inc_stat(STAT_CONN_NEW);
         pkt->new_flow = 1;

@@ -17,6 +17,12 @@
 #include "core/helpers.bpf.h"
 #include "core/rules.bpf.h"
 #include "core/conntrack.bpf.h"
+#if FW_ANTI_SPOOF
+#include "core/anti_spoof.bpf.h"
+#endif
+#if FW_RATE_LIMIT
+#include "core/rate_limit.bpf.h"
+#endif
 
 #include "protocols/proto_eth.bpf.h"
 #include "protocols/proto_ipv4.bpf.h"
@@ -72,6 +78,13 @@ static __always_inline int process_packet_impl(struct pkt_ctx *pkt)
 #define RECORD_EXTRACTION() do {} while (0)
 #endif
 
+#if FW_ANTI_SPOOF
+    if (!anti_spoof_allow(pkt)) {
+        decision = ACTION_DROP;
+        RECORD_EXTRACTION();
+        goto update_stats;
+    }
+#endif
     switch (pkt->proto) {
     case IPPROTO_TCP:
         if (parse_tcp(pkt) < 0) {
@@ -81,7 +94,17 @@ static __always_inline int process_packet_impl(struct pkt_ctx *pkt)
         } else {
             RECORD_EXTRACTION();
             now = bpf_ktime_get_ns();
-            decision = process_tcp_state(pkt, now);
+#if FW_RATE_LIMIT
+            if ((pkt->tcp_flags & TCP_FLAG_SYN) && !(pkt->tcp_flags & TCP_FLAG_ACK) &&
+                !syn_rate_allow(pkt, now))
+                decision = ACTION_DROP;
+            else
+#endif
+                decision = process_tcp_state(pkt, now);
+#if FW_CONN_LIMIT
+            if (decision == ACTION_PASS)
+                connection_limit_touch(pkt, now);
+#endif
         }
         break;
     case IPPROTO_UDP:
@@ -120,6 +143,9 @@ static __always_inline int process_packet_impl(struct pkt_ctx *pkt)
     }
 
     /* 4. Update Statistics & Emit Telemetry Event (Consolidated after parsing) */
+#if FW_ANTI_SPOOF
+update_stats: ;
+#endif
 #if FW_TIMING
     __u64 stat_start = bpf_ktime_get_ns();
 #endif
@@ -154,13 +180,23 @@ static __always_inline int process_packet_impl(struct pkt_ctx *pkt)
 #endif
 #ifndef MINIMAL_OBSERVABILITY
     /* Only emit ringbuffer events for drops and state transitions to eliminate bulk data lock contention */
-    if (decision == ACTION_DROP || pkt->new_flow ||
+    if (
+#if FW_CONN_LIMIT
+        pkt->reason != REASON_CONN_LIMIT &&
+#endif
+#if FW_ANTI_SPOOF
+        pkt->reason != REASON_ANTI_SPOOF &&
+#endif
+#if FW_RATE_LIMIT
+        pkt->reason != REASON_RATE_LIMIT &&
+#endif
+        (decision == ACTION_DROP || pkt->new_flow ||
         pkt->conn_state == CONN_STATE_SYN_SENT ||
         pkt->conn_state == CONN_STATE_SYN_RECV ||
         pkt->conn_state == CONN_STATE_CLOSED ||
         pkt->conn_state == CONN_STATE_FIN_WAIT ||
         pkt->conn_state == CONN_STATE_NEW ||
-        (pkt->proto == IPPROTO_TCP && (pkt->tcp_flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST)))) {
+        (pkt->proto == IPPROTO_TCP && (pkt->tcp_flags & (TCP_FLAG_SYN | TCP_FLAG_FIN | TCP_FLAG_RST))))) {
 #if FW_TIMING
         __u64 event_start = bpf_ktime_get_ns();
 #endif
@@ -197,13 +233,14 @@ static __always_inline int process_packet(struct pkt_ctx *pkt)
 SEC("xdp")
 int xdp_firewall_prog(struct xdp_md *ctx)
 {
-    struct pkt_ctx pkt;
+    struct pkt_ctx local;
+    struct pkt_ctx *pkt = &local;
 
-    if (pkt_ctx_init_xdp(&pkt, ctx) < 0) {
+    if (pkt_ctx_init_xdp(pkt, ctx) < 0) {
         return XDP_PASS;
     }
 
-    int decision = process_packet(&pkt);
+    int decision = process_packet(pkt);
     if (decision == ACTION_DROP) {
         return XDP_DROP;
     }
@@ -214,14 +251,15 @@ int xdp_firewall_prog(struct xdp_md *ctx)
 SEC("tc")
 int tc_ingress_prog(struct __sk_buff *skb)
 {
-    struct pkt_ctx pkt;
+    struct pkt_ctx local;
+    struct pkt_ctx *pkt = &local;
 
-    if (pkt_ctx_init_skb(&pkt, skb, DIR_INGRESS) < 0) {
+    if (pkt_ctx_init_skb(pkt, skb, DIR_INGRESS) < 0) {
         inc_stat(STAT_DROPPED_MALFORMED);
         return TC_ACT_SHOT;
     }
 
-    int decision = process_packet(&pkt);
+    int decision = process_packet(pkt);
     if (decision == ACTION_DROP) {
         return TC_ACT_SHOT;
     }
@@ -232,14 +270,15 @@ int tc_ingress_prog(struct __sk_buff *skb)
 SEC("tc")
 int tc_egress_prog(struct __sk_buff *skb)
 {
-    struct pkt_ctx pkt;
+    struct pkt_ctx local;
+    struct pkt_ctx *pkt = &local;
 
-    if (pkt_ctx_init_skb(&pkt, skb, DIR_EGRESS) < 0) {
+    if (pkt_ctx_init_skb(pkt, skb, DIR_EGRESS) < 0) {
         inc_stat(STAT_DROPPED_MALFORMED);
         return TC_ACT_SHOT;
     }
 
-    int decision = process_packet(&pkt);
+    int decision = process_packet(pkt);
     if (decision == ACTION_DROP) {
         return TC_ACT_SHOT;
     }

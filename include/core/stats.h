@@ -1,5 +1,6 @@
 #ifndef __CORE_STATS_H__
 #define __CORE_STATS_H__
+#include "build_config.h"
 
 /* Statistics map counter indices */
 enum stat_counter {
@@ -20,6 +21,18 @@ enum stat_counter {
     STAT_CONN_CLOSED,
     STAT_CONN_TIMEOUT,
     STAT_EVENTS_LOST,
+#if FW_CONN_LIMIT
+    STAT_CONN_LIMIT_DROP,
+    STAT_CONN_LIMIT_MAP_FULL,
+#endif
+#if FW_ANTI_SPOOF
+    STAT_ANTI_SPOOF_DROP,
+#endif
+#if FW_RATE_LIMIT
+    STAT_RATE_SOURCE_DROP,
+    STAT_RATE_AGGREGATE_DROP,
+    STAT_RATE_MAP_FULL,
+#endif
     STAT_MAX_COUNTERS,
 };
 

@@ -15,6 +15,10 @@ static __always_inline int process_tcp_state(struct pkt_ctx *pkt, __u64 now)
             inc_stat(STAT_DROPPED_RULE);
             return ACTION_DROP;
         }
+#if FW_CONN_LIMIT
+        if (!connection_limit_admit(pkt, now))
+            return ACTION_DROP;
+#endif
         struct flow_entry *existing = bpf_map_lookup_elem(&conntrack_map, key);
         if (existing && (now <= existing->last_seen_ns ||
             now - existing->last_seen_ns <= existing->timeout_ns)) {

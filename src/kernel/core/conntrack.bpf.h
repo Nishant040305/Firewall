@@ -2,6 +2,9 @@
 #define __ENGINE_DISPATCH_BPF_H__
 
 #include "timing.bpf.h"
+#if FW_CONN_LIMIT
+#include "connection_limit.bpf.h"
+#endif
 
 /* Instrument only the selected engine. With FW_TIMING=0 none of these
  * timestamps or metric updates exist in the translation unit. */

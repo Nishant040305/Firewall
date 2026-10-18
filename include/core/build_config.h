@@ -14,6 +14,15 @@
 #ifndef FW_LOGGING
 #define FW_LOGGING 0
 #endif
+#ifndef FW_RATE_LIMIT
+#define FW_RATE_LIMIT 1
+#endif
+#ifndef FW_ANTI_SPOOF
+#define FW_ANTI_SPOOF 1
+#endif
+#ifndef FW_CONN_LIMIT
+#define FW_CONN_LIMIT 1
+#endif
 #ifndef FW_OBSERVABILITY
 #define FW_OBSERVABILITY 0 /* 0: full, 1: counters only, 2: none */
 #endif
@@ -21,8 +30,11 @@
 #if FW_ENGINE < 1 || FW_ENGINE > 3
 #error "Invalid firewall engine"
 #endif
-#if (FW_TIMING != 0 && FW_TIMING != 1) || (FW_LOGGING != 0 && FW_LOGGING != 1)
+#if (FW_TIMING != 0 && FW_TIMING != 1) || (FW_LOGGING != 0 && FW_LOGGING != 1) || (FW_RATE_LIMIT != 0 && FW_RATE_LIMIT != 1) || (FW_ANTI_SPOOF != 0 && FW_ANTI_SPOOF != 1)
 #error "Feature flags must be 0 or 1"
+#endif
+#if FW_CONN_LIMIT != 0 && FW_CONN_LIMIT != 1
+#error "CONN_LIMIT must be 0 or 1"
 #endif
 #if FW_OBSERVABILITY < 0 || FW_OBSERVABILITY > 2
 #error "Invalid observability mode"
