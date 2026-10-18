@@ -241,6 +241,30 @@ void firewall_ctx_reload(struct firewall_ctx *ctx)
             return;
         }
         /* Hook and log destination changes require restart. */
+#if FW_CONN_LIMIT
+        if (candidate.connection_limit.enabled != ctx->config.connection_limit.enabled ||
+            candidate.connection_limit.source_max != ctx->config.connection_limit.source_max ||
+            strcmp(candidate.connection_limit.interfaces, ctx->config.connection_limit.interfaces)) {
+            fprintf(stderr, "[-] Connection-limit changes require restart; keeping current configuration\n");
+            return;
+        }
+#endif
+#if FW_ANTI_SPOOF
+        if (candidate.anti_spoof.enabled != ctx->config.anti_spoof.enabled ||
+            strcmp(candidate.anti_spoof.path, ctx->config.anti_spoof.path)) {
+            fprintf(stderr, "[-] Anti-spoof changes require restart; keeping current configuration\n");
+            return;
+        }
+#endif
+#if FW_RATE_LIMIT
+        if (candidate.rate_limit.enabled != ctx->config.rate_limit.enabled ||
+            strcmp(candidate.rate_limit.interfaces, ctx->config.rate_limit.interfaces) ||
+            memcmp(&candidate.rate_limit.limits, &ctx->config.rate_limit.limits,
+                   sizeof(candidate.rate_limit.limits))) {
+            fprintf(stderr, "[-] Rate-limit changes require restart; keeping current configuration\n");
+            return;
+        }
+#endif
         ctx->config.global = candidate.global;
         ctx->config.telemetry.aggregate_window_sec = candidate.telemetry.aggregate_window_sec;
 #if FW_LOGGING

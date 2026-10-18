@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <errno.h>
 #include "config.h"
 
 const char *direction_to_str(enum traffic_direction dir)
@@ -39,6 +40,19 @@ void config_set_defaults(struct firewall_config *cfg)
     cfg->telemetry.aggregate_window_sec = 30;
     cfg->telemetry.max_file_mb = 20;
     cfg->telemetry.console_events = 0;
+#if FW_CONN_LIMIT
+    cfg->connection_limit.source_max = 32;
+#endif
+#if FW_ANTI_SPOOF
+    snprintf(cfg->anti_spoof.path, sizeof(cfg->anti_spoof.path), "config/anti_spoof.conf");
+#endif
+#if FW_RATE_LIMIT
+    cfg->rate_limit.limits = (struct syn_rate_config){
+        .source_rate = 100, .source_burst = 200,
+        .aggregate_rate = 10000, .aggregate_burst = 20000,
+        .aggregate_enabled = 1, /* Preserve behavior of existing configs. */
+    };
+#endif
 }
 
 static char *trim_whitespace(char *str)
@@ -53,6 +67,19 @@ static char *trim_whitespace(char *str)
     }
     return str;
 }
+
+#if FW_RATE_LIMIT
+static int parse_rate_value(const char *text, __u32 *value)
+{
+    char *end;
+    errno = 0;
+    if (*text < '0' || *text > '9') return -1;
+    unsigned long parsed = strtoul(text, &end, 10);
+    if (errno || *end || !parsed || parsed > RATE_MAX_VALUE) return -1;
+    *value = parsed;
+    return 0;
+}
+#endif
 
 int config_load_file(const char *path, struct firewall_config *cfg)
 {
@@ -73,7 +100,10 @@ int config_load_file(const char *path, struct firewall_config *cfg)
         if (*p == '#' || *p == '\0') continue;
 
         /* Section Header (e.g., "global:") */
-        if (p[strlen(p) - 1] == ':') {
+        if (p[strlen(p) - 1] == ':' &&
+            !(strcmp(current_section, "rate_limit") == 0 && strcmp(p, "interfaces:") == 0) &&
+            !(strcmp(current_section, "connection_limit") == 0 && strcmp(p, "interfaces:") == 0) &&
+            !(strcmp(current_section, "anti_spoof") == 0 && strcmp(p, "path:") == 0)) {
             p[strlen(p) - 1] = '\0';
             snprintf(current_section, sizeof(current_section), "%s", p);
             continue;
@@ -86,7 +116,82 @@ int config_load_file(const char *path, struct firewall_config *cfg)
         char *key = trim_whitespace(p);
         char *val = trim_whitespace(colon + 1);
 
-        if (strcmp(key, "interface") == 0) {
+        if (strcmp(current_section, "connection_limit") == 0) {
+#if FW_CONN_LIMIT
+            int invalid = 0;
+            if (!strcmp(key, "enabled")) {
+                if (!strcmp(val, "true")) cfg->connection_limit.enabled = 1;
+                else if (!strcmp(val, "false")) cfg->connection_limit.enabled = 0;
+                else invalid = 1;
+            } else if (!strcmp(key, "interfaces")) {
+                if (strlen(val) >= sizeof(cfg->connection_limit.interfaces)) invalid = 1;
+                else snprintf(cfg->connection_limit.interfaces, sizeof(cfg->connection_limit.interfaces), "%s", val);
+            } else if (!strcmp(key, "source_max")) {
+                char *end;
+                errno = 0;
+                unsigned long value = strtoul(val, &end, 10);
+                if (*val < '0' || *val > '9' || errno || *end || !value || value > 32) invalid = 1;
+                else cfg->connection_limit.source_max = value;
+            } else invalid = 1;
+            if (invalid) {
+                fprintf(stderr, "[-] Invalid connection_limit setting: %s\n", key);
+                fclose(f);
+                return -1;
+            }
+#else
+            continue;
+#endif
+        } else if (strcmp(current_section, "anti_spoof") == 0) {
+#if FW_ANTI_SPOOF
+            int invalid = 0;
+            if (!strcmp(key, "enabled")) {
+                if (!strcmp(val, "true")) cfg->anti_spoof.enabled = 1;
+                else if (!strcmp(val, "false")) cfg->anti_spoof.enabled = 0;
+                else invalid = 1;
+            } else if (!strcmp(key, "path") && *val && strlen(val) < sizeof(cfg->anti_spoof.path))
+                snprintf(cfg->anti_spoof.path, sizeof(cfg->anti_spoof.path), "%s", val);
+            else invalid = 1;
+            if (invalid) {
+                fprintf(stderr, "[-] Invalid anti_spoof setting: %s\n", key);
+                fclose(f);
+                return -1;
+            }
+#else
+            continue;
+#endif
+        } else if (strcmp(current_section, "rate_limit") == 0) {
+#if FW_RATE_LIMIT
+            int invalid = 0;
+            if (!strcmp(key, "enabled")) {
+                if (!strcmp(val, "true")) cfg->rate_limit.enabled = 1;
+                else if (!strcmp(val, "false")) cfg->rate_limit.enabled = 0;
+                else invalid = 1;
+            } else if (!strcmp(key, "aggregate_enabled")) {
+                if (!strcmp(val, "true")) cfg->rate_limit.limits.aggregate_enabled = 1;
+                else if (!strcmp(val, "false")) cfg->rate_limit.limits.aggregate_enabled = 0;
+                else invalid = 1;
+            } else if (!strcmp(key, "interfaces")) {
+                if (strlen(val) >= sizeof(cfg->rate_limit.interfaces)) invalid = 1;
+                else snprintf(cfg->rate_limit.interfaces, sizeof(cfg->rate_limit.interfaces), "%s", val);
+            } else if (!strcmp(key, "source_rate"))
+                invalid = parse_rate_value(val, &cfg->rate_limit.limits.source_rate);
+            else if (!strcmp(key, "source_burst"))
+                invalid = parse_rate_value(val, &cfg->rate_limit.limits.source_burst);
+            else if (!strcmp(key, "aggregate_rate"))
+                invalid = parse_rate_value(val, &cfg->rate_limit.limits.aggregate_rate);
+            else if (!strcmp(key, "aggregate_burst"))
+                invalid = parse_rate_value(val, &cfg->rate_limit.limits.aggregate_burst);
+            else invalid = 1;
+            if (invalid) {
+                fprintf(stderr, "[-] Invalid rate_limit setting: %s\n", key);
+                fclose(f);
+                return -1;
+            }
+#else
+            /* Runtime configuration cannot enable a compiled-out feature. */
+            continue;
+#endif
+        } else if (strcmp(key, "interface") == 0) {
             snprintf(cfg->interface, sizeof(cfg->interface), "%s", val);
         } else if (strcmp(key, "log_level") == 0) {
             snprintf(cfg->log_level, sizeof(cfg->log_level), "%s", val);
@@ -148,6 +253,36 @@ int config_load_file(const char *path, struct firewall_config *cfg)
 
 int config_validate(const struct firewall_config *cfg)
 {
+#if FW_CONN_LIMIT
+    if (!cfg->connection_limit.source_max || cfg->connection_limit.source_max > 32 ||
+        (cfg->connection_limit.enabled && cfg->direction == TRAFFIC_DIR_EGRESS))
+        return -1;
+    if (cfg->connection_limit.enabled && strchr(cfg->interface, ',') &&
+        !cfg->connection_limit.interfaces[0]) {
+        fprintf(stderr, "[-] Select connection_limit.interfaces for multiple attached interfaces\n");
+        return -1;
+    }
+#endif
+#if FW_ANTI_SPOOF
+    if (cfg->anti_spoof.enabled &&
+        (!cfg->anti_spoof.path[0] || cfg->direction == TRAFFIC_DIR_EGRESS))
+        return -1;
+#endif
+#if FW_RATE_LIMIT
+    const struct syn_rate_config *rate = &cfg->rate_limit.limits;
+    if (!rate->source_rate || !rate->source_burst ||
+        rate->source_rate > RATE_MAX_VALUE || rate->source_burst > RATE_MAX_VALUE ||
+        rate->aggregate_enabled > 1 ||
+        (rate->aggregate_enabled && (!rate->aggregate_rate || !rate->aggregate_burst ||
+         rate->aggregate_rate > RATE_MAX_VALUE || rate->aggregate_burst > RATE_MAX_VALUE)))
+        return -1;
+    if (cfg->rate_limit.enabled && cfg->direction == TRAFFIC_DIR_EGRESS)
+        return -1;
+    if (cfg->rate_limit.enabled && strchr(cfg->interface, ',') && !cfg->rate_limit.interfaces[0]) {
+        fprintf(stderr, "[-] Select rate_limit.interfaces explicitly for multiple attached interfaces\n");
+        return -1;
+    }
+#endif
     if (strlen(cfg->interface) == 0) {
         return -1;
     }
@@ -172,4 +307,28 @@ void config_dump(const struct firewall_config *cfg)
     printf("    - Mode:      %s\n", mode_to_str(cfg->mode));
     printf("    - Direction: %s\n", direction_to_str(cfg->direction));
     printf("    - Log Level: %s\n", cfg->log_level);
+#if FW_CONN_LIMIT
+    printf("    - TCP connection limit: %s (maximum %u per initiator IP)\n",
+           cfg->connection_limit.enabled ? "enabled" : "disabled", cfg->connection_limit.source_max);
+#else
+    puts("    - TCP connection limit: compiled out (connection_limit settings ignored)");
+#endif
+#if FW_ANTI_SPOOF
+    printf("    - Anti-spoofing: %s (policy: %s)\n",
+           cfg->anti_spoof.enabled ? "enabled" : "disabled", cfg->anti_spoof.path);
+#else
+    puts("    - Anti-spoofing: compiled out (anti_spoof configuration ignored)");
+#endif
+#if FW_RATE_LIMIT
+    printf("    - SYN limiter: %s (source %u/s burst %u per ingress scope)\n",
+           cfg->rate_limit.enabled ? "enabled" : "disabled",
+           cfg->rate_limit.limits.source_rate, cfg->rate_limit.limits.source_burst);
+    if (cfg->rate_limit.limits.aggregate_enabled)
+        printf("    - Aggregate SYN budget: %u/s burst %u per ingress scope\n",
+               cfg->rate_limit.limits.aggregate_rate, cfg->rate_limit.limits.aggregate_burst);
+    else
+        puts("    - Aggregate SYN budget: disabled (per-source limits only)");
+#else
+    puts("    - SYN limiter: compiled out (rate_limit configuration ignored)");
+#endif
 }

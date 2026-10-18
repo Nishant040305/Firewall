@@ -4,6 +4,28 @@
 
 interface: eth0
 
+# Concurrent TCP connections, including half-open and closing sessions.
+connection_limit:
+  enabled: true
+  interfaces:               # empty selects the sole attached interface
+  source_max: 32            # per initiator IP across selected interfaces (1..32)
+
+# Enable only after defining correct per-interface source prefixes.
+anti_spoof:
+  enabled: false
+  path: config/anti_spoof.conf
+
+# SYN flood protection; tune for legitimate clients sharing a NAT address.
+# With multiple attached interfaces, explicitly select external ingress scopes.
+rate_limit:
+  enabled: true
+  interfaces:               # empty selects the sole attached interface
+  source_rate: 100          # SYN packets/second per source IP per scope
+  source_burst: 200
+  aggregate_enabled: false  # per-IP limits only; no shared SYN cap
+  aggregate_rate: 10000     # SYN packets/second per selected ingress interface
+  aggregate_burst: 20000
+
 global:
   direction: both          # in (ingress), out (egress), or both (bidirectional)
   mode: hybrid             # hybrid (XDP for Ingress + TC for Egress), tc, or xdp

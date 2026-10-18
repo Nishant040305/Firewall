@@ -3,6 +3,9 @@
 
 #include <linux/types.h>
 #include <core/build_config.h>
+#if FW_RATE_LIMIT
+#include <core/rate_limit.h>
+#endif
 
 enum traffic_direction {
     TRAFFIC_DIR_INGRESS = 1,
@@ -35,6 +38,29 @@ struct firewall_config {
         int max_file_mb;
         int console_events;
     } telemetry;
+
+#if FW_RATE_LIMIT
+    struct {
+        int enabled;
+        char interfaces[256]; /* Empty selects the sole attached interface. */
+        struct syn_rate_config limits;
+    } rate_limit;
+#endif
+
+#if FW_ANTI_SPOOF
+    struct {
+        int enabled;
+        char path[512];
+    } anti_spoof;
+#endif
+
+#if FW_CONN_LIMIT
+    struct {
+        int enabled;
+        char interfaces[256];
+        __u32 source_max;
+    } connection_limit;
+#endif
 
 };
 

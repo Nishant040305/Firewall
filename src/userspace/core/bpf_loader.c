@@ -10,12 +10,85 @@
 #include <core/types.h>
 #include "bpf_loader.h"
 #include "config.h"
+#if FW_CONN_LIMIT
+#include <core/connection_limit.h>
+#endif
+#if FW_ANTI_SPOOF
+#include "anti_spoof_mgr.h"
+#endif
 
 static int validate_object_profile(struct bpf_object *obj)
 {
     struct bpf_map *ct = bpf_object__find_map_by_name(obj, "conntrack_map");
     struct bpf_map *rules = bpf_object__find_map_by_name(obj, "rules_map");
+    const char *connection_maps[] = {"conn_limit_cfg", "conn_limit_src", "conn_limit_hint",
+                                     "conn_limit_zero", "conn_limit_on", "conn_limit_tmp"};
+    for (unsigned i = 0; i < sizeof(connection_maps) / sizeof(connection_maps[0]); i++) {
+        if (!!bpf_object__find_map_by_name(obj, connection_maps[i]) != !!FW_CONN_LIMIT) {
+            fprintf(stderr, "[-] Connection-limit maps do not match this build\n");
+            return -1;
+        }
+    }
+#if FW_CONN_LIMIT
+    struct bpf_map *connection_sources = bpf_object__find_map_by_name(obj, "conn_limit_src");
+    const __u32 connection_types[] = {BPF_MAP_TYPE_HASH, BPF_MAP_TYPE_HASH,
+        BPF_MAP_TYPE_LRU_HASH, BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_PERCPU_ARRAY};
+    const __u32 connection_keys[] = {sizeof(__u32), sizeof(struct connection_source),
+        sizeof(struct flow_key), sizeof(__u32), sizeof(__u32), sizeof(__u32)};
+    const __u32 connection_values[] = {sizeof(__u32), sizeof(struct connection_source_slots),
+        sizeof(struct connection_hint), sizeof(struct connection_zero_template), sizeof(__u32),
+        sizeof(struct connection_scratch)};
+    for (unsigned i = 0; i < sizeof(connection_maps) / sizeof(connection_maps[0]); i++) {
+        struct bpf_map *map = bpf_object__find_map_by_name(obj, connection_maps[i]);
+        if (bpf_map__type(map) != connection_types[i] ||
+            bpf_map__key_size(map) != connection_keys[i] ||
+            bpf_map__value_size(map) != connection_values[i]) return -1;
+    }
+    if (bpf_map__max_entries(connection_sources) != CONN_LIMIT_SOURCES) return -1;
+#endif
+#if FW_ANTI_SPOOF
+    struct bpf_map *spoof = bpf_object__find_map_by_name(obj, "anti_spoof_prefix");
+    struct bpf_map *scopes = bpf_object__find_map_by_name(obj, "anti_spoof_scopes");
+    if (!spoof || !scopes || bpf_map__type(spoof) != BPF_MAP_TYPE_LPM_TRIE ||
+        bpf_map__key_size(spoof) != sizeof(struct anti_spoof_key) ||
+        bpf_map__value_size(spoof) != sizeof(__u32) ||
+        bpf_map__type(scopes) != BPF_MAP_TYPE_HASH ||
+        bpf_map__key_size(scopes) != sizeof(__u32) || bpf_map__value_size(scopes) != sizeof(__u32)) {
+        fprintf(stderr, "[-] BPF anti-spoof maps do not match this build\n");
+        return -1;
+    }
+#else
+    if (bpf_object__find_map_by_name(obj, "anti_spoof_prefix") ||
+        bpf_object__find_map_by_name(obj, "anti_spoof_scopes")) {
+        fprintf(stderr, "[-] BPF object contains compiled-out anti-spoof maps\n");
+        return -1;
+    }
+#endif
+#if FW_RATE_LIMIT
+    struct bpf_map *rate = bpf_object__find_map_by_name(obj, "syn_rate_config");
+    struct bpf_map *sources = bpf_object__find_map_by_name(obj, "syn_rate_sources");
+    struct bpf_map *total = bpf_object__find_map_by_name(obj, "syn_rate_total");
+#else
+    if (bpf_object__find_map_by_name(obj, "syn_rate_config") ||
+        bpf_object__find_map_by_name(obj, "syn_rate_sources") ||
+        bpf_object__find_map_by_name(obj, "syn_rate_total")) {
+        fprintf(stderr, "[-] BPF object contains a compiled-out rate limiter\n");
+        return -1;
+    }
+#endif
     if (!ct || !rules || bpf_map__key_size(ct) != sizeof(struct flow_key) ||
+#if FW_RATE_LIMIT
+        !rate || !sources || !total ||
+        bpf_map__type(rate) != BPF_MAP_TYPE_HASH ||
+        bpf_map__key_size(rate) != sizeof(__u32) ||
+        bpf_map__value_size(rate) != sizeof(struct syn_rate_config) ||
+        bpf_map__type(sources) != BPF_MAP_TYPE_HASH ||
+        bpf_map__key_size(sources) != sizeof(struct rate_source_key) ||
+        bpf_map__value_size(sources) != sizeof(struct rate_bucket) ||
+        bpf_map__type(total) != BPF_MAP_TYPE_HASH ||
+        bpf_map__key_size(total) != sizeof(__u32) ||
+        bpf_map__value_size(total) != sizeof(struct rate_bucket) ||
+#endif
         bpf_map__value_size(ct) != sizeof(struct flow_entry) ||
         bpf_map__value_size(rules) != sizeof(struct fw_rule) ||
         bpf_map__type(ct) != (FW_ENGINE == FW_ENGINE_DUALMAP ?
@@ -154,6 +227,74 @@ static int attach_tc_egress(struct bpf_loader_ctx *ctx, struct iface_hook *ih)
     return 0;
 }
 
+#if FW_RATE_LIMIT
+static int initialize_syn_limits(struct bpf_loader_ctx *ctx, const struct firewall_config *cfg)
+{
+    if (!cfg->rate_limit.enabled) return 0;
+    int config_fd = bpf_object__find_map_fd_by_name(ctx->obj, "syn_rate_config");
+    int total_fd = bpf_object__find_map_fd_by_name(ctx->obj, "syn_rate_total");
+    char selected[256];
+    snprintf(selected, sizeof(selected), "%s", cfg->rate_limit.interfaces[0] ?
+             cfg->rate_limit.interfaces : cfg->interface);
+    char *save = NULL;
+    unsigned count = 0;
+    for (char *name = strtok_r(selected, ",", &save); name; name = strtok_r(NULL, ",", &save)) {
+        while (*name == ' ' || *name == '\t') name++;
+        size_t len = strlen(name);
+        while (len && (name[len - 1] == ' ' || name[len - 1] == '\t')) name[--len] = '\0';
+        __u32 index = 0;
+        for (int i = 0; i < ctx->num_ifaces; i++)
+            if (!strcmp(name, ctx->ifaces[i].ifname)) index = ctx->ifaces[i].ifindex;
+        if (!index) {
+            fprintf(stderr, "[-] Rate-limit interface '%s' is not an attached interface\n", name);
+            return -1;
+        }
+        struct rate_bucket initial = {
+            .credit = (__u64)cfg->rate_limit.limits.aggregate_burst * RATE_CREDIT_PER_PACKET,
+        };
+        if ((cfg->rate_limit.limits.aggregate_enabled &&
+             bpf_map_update_elem(total_fd, &index, &initial, BPF_NOEXIST)) ||
+            bpf_map_update_elem(config_fd, &index, &cfg->rate_limit.limits, BPF_NOEXIST)) {
+            fprintf(stderr, "[-] Cannot initialize SYN limiter (duplicate scope or map error): %s\n", strerror(errno));
+            return -1;
+        }
+        printf("[+] SYN protection selected on ingress %s\n", name);
+        count++;
+    }
+    return count ? 0 : -1;
+}
+#endif
+
+#if FW_CONN_LIMIT
+static int initialize_connection_limits(struct bpf_loader_ctx *ctx, const struct firewall_config *cfg)
+{
+    if (!cfg->connection_limit.enabled) return 0;
+    int fd = bpf_object__find_map_fd_by_name(ctx->obj, "conn_limit_cfg");
+    char selected[256];
+    snprintf(selected, sizeof(selected), "%s", cfg->connection_limit.interfaces[0] ?
+             cfg->connection_limit.interfaces : cfg->interface);
+    char *save = NULL;
+    unsigned count = 0;
+    for (char *name = strtok_r(selected, ",", &save); name; name = strtok_r(NULL, ",", &save)) {
+        while (*name == ' ' || *name == '\t') name++;
+        size_t len = strlen(name);
+        while (len && (name[len - 1] == ' ' || name[len - 1] == '\t')) name[--len] = '\0';
+        __u32 index = 0;
+        for (int i = 0; i < ctx->num_ifaces; i++)
+            if (!strcmp(name, ctx->ifaces[i].ifname)) index = ctx->ifaces[i].ifindex;
+        if (!index || bpf_map_update_elem(fd, &index, &cfg->connection_limit.source_max, BPF_NOEXIST)) {
+            fprintf(stderr, "[-] Invalid/duplicate connection-limit interface or map failure: %s\n", name);
+            return -1;
+        }
+        printf("[+] TCP connection cap selected on ingress %s\n", name);
+        count++;
+    }
+    __u32 zero = 0, enabled = 1;
+    int on_fd = bpf_object__find_map_fd_by_name(ctx->obj, "conn_limit_on");
+    return count && !bpf_map_update_elem(on_fd, &zero, &enabled, BPF_ANY) ? 0 : -1;
+}
+#endif
+
 int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const struct firewall_config *cfg)
 {
     memset(ctx, 0, sizeof(*ctx));
@@ -246,6 +387,24 @@ int bpf_loader_init(struct bpf_loader_ctx *ctx, const char *bpf_obj_path, const 
         bpf_loader_cleanup(ctx);
         return -1;
     }
+#if FW_CONN_LIMIT
+    if (initialize_connection_limits(ctx, cfg)) {
+        bpf_loader_cleanup(ctx);
+        return -1;
+    }
+#endif
+#if FW_ANTI_SPOOF
+    if (anti_spoof_initialize(ctx, cfg)) {
+        bpf_loader_cleanup(ctx);
+        return -1;
+    }
+#endif
+#if FW_RATE_LIMIT
+    if (initialize_syn_limits(ctx, cfg)) {
+        bpf_loader_cleanup(ctx);
+        return -1;
+    }
+#endif
     return 0;
 }
 
@@ -320,7 +479,35 @@ int bpf_loader_open_pinned_maps(struct bpf_loader_ctx *ctx)
     ctx->stats_map_fd = bpf_obj_get(MAP_PIN_STATS);
     ctx->events_ringbuf_fd = bpf_obj_get(MAP_PIN_EVENTS);
 
+    int rate_fd = bpf_obj_get(BPF_FS_PATH "/syn_rate_config");
+    int has_rate = rate_fd >= 0;
+#if FW_RATE_LIMIT
+    int rate_match = map_matches(rate_fd, BPF_MAP_TYPE_HASH, sizeof(__u32), sizeof(struct syn_rate_config));
+#else
+    int rate_match = !has_rate;
+#endif
+    if (rate_fd >= 0) close(rate_fd);
+    int spoof_fd = bpf_obj_get(BPF_FS_PATH "/anti_spoof_prefix");
+    int has_spoof = spoof_fd >= 0;
+    if (spoof_fd >= 0) close(spoof_fd);
+    int connection_fd = bpf_obj_get(BPF_FS_PATH "/conn_limit_src");
+    int has_connection_limit = connection_fd >= 0;
+#if FW_CONN_LIMIT
+    int connection_match = map_matches(connection_fd, BPF_MAP_TYPE_HASH,
+        sizeof(struct connection_source), sizeof(struct connection_source_slots));
+#else
+    int connection_match = !has_connection_limit;
+#endif
+    if (connection_fd >= 0) close(connection_fd);
+    struct bpf_map_info stats_info = {0};
+    __u32 stats_size = sizeof(stats_info);
+    int stats_match = ctx->stats_map_fd < 0 ||
+        (!bpf_obj_get_info_by_fd(ctx->stats_map_fd, &stats_info, &stats_size) &&
+         stats_info.max_entries == STAT_MAX_COUNTERS);
+
     if (!map_matches(ctx->rules_map_fd, BPF_MAP_TYPE_ARRAY, sizeof(__u32), sizeof(struct fw_rule)) ||
+        has_rate != !!FW_RATE_LIMIT || !rate_match || has_spoof != !!FW_ANTI_SPOOF || !stats_match ||
+        has_connection_limit != !!FW_CONN_LIMIT || !connection_match ||
         !map_matches(ctx->conntrack_map_fd, FW_ENGINE == FW_ENGINE_DUALMAP ? BPF_MAP_TYPE_HASH : BPF_MAP_TYPE_LRU_HASH,
                      sizeof(struct flow_key), sizeof(struct flow_entry)) ||
         (ctx->flow_cache_map_fd >= 0) != (FW_ENGINE == FW_ENGINE_FASTCACHE) ||
