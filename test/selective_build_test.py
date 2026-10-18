@@ -52,7 +52,7 @@ def main():
             assert ("engines/dualmap.bpf.h" in deps) == (engine == "dualmap")
             if args.kernel:
                 output = make(*flags, "test-ipv6-kernel")
-                assert "55 XDP/TC" in output, output
+                assert "101 XDP/TC" in output, output
             count += 1
             print(f"PASS {profile.name}", flush=True)
     for invalid in (("ENGINE=typo",), ("TIMING=2",), ("LOGGING=2",),

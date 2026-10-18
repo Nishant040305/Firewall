@@ -39,9 +39,52 @@ class PresetTests(unittest.TestCase):
         for args in (("PRESET=typo",), ("logging", "lean"),
                      ("logging", "PRESET=lean"),
                      ("PRESET=logging", "OBSERVABILITY=none"),
-                     ("PRESET=lean", "TIMING=1")):
+                      ("PRESET=lean", "TIMING=1"), ("RATE_LIMIT=2",), ("ANTI_SPOOF=2",)):
             with self.subTest(args=args):
                 self.assertNotEqual(make(*args, "print-config").returncode, 0)
+
+    def test_rate_limit_isolation(self):
+        result = make("RATE_LIMIT=0", "print-config")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("rate_limit=0", result.stdout)
+        self.assertIn("output=build/profiles/fastcache-t0-l0-full-r0", result.stdout)
+
+    def test_rate_limit_preprocessor_exclusion(self):
+        for enabled in (0, 1):
+            result = subprocess.run(
+                ["cc", "-E", "-P", "-Iinclude", "-Isrc/kernel",
+                 "-DFW_CONN_LIMIT=0", f"-DFW_RATE_LIMIT={enabled}", "src/kernel/main.bpf.c"],
+                cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual("syn_rate_allow" in result.stdout, bool(enabled))
+            self.assertEqual("syn_rate_sources" in result.stdout, bool(enabled))
+            self.assertEqual("bpf_spin_lock(&source->lock)" in result.stdout, bool(enabled))
+
+    def test_anti_spoof_preprocessor_exclusion(self):
+        for enabled in (0, 1):
+            result = subprocess.run(
+                ["cc", "-E", "-P", "-Iinclude", "-Isrc/kernel",
+                 f"-DFW_ANTI_SPOOF={enabled}", "src/kernel/main.bpf.c"],
+                cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual("anti_spoof_allow" in result.stdout, bool(enabled))
+            self.assertEqual("anti_spoof_prefix" in result.stdout, bool(enabled))
+        result = make("ANTI_SPOOF=0", "RATE_LIMIT=0", "print-config")
+        self.assertIn("output=build/profiles/fastcache-t0-l0-full-r0-a0", result.stdout)
+        self.assertNotIn("core/anti_spoof_mgr.c", result.stdout)
+
+    def test_connection_limit_exclusion(self):
+        for enabled in (0, 1):
+            result = subprocess.run(
+                ["cc", "-E", "-P", "-Iinclude", "-Isrc/kernel",
+                 f"-DFW_CONN_LIMIT={enabled}", "src/kernel/main.bpf.c"],
+                cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual("connection_limit_admit" in result.stdout, bool(enabled))
+            self.assertEqual("conn_limit_src" in result.stdout, bool(enabled))
+        result = make("CONN_LIMIT=0", "print-config")
+        self.assertIn("fastcache-t0-l0-full-c0", result.stdout)
+        self.assertNotEqual(make("CONN_LIMIT=2", "print-config").returncode, 0)
 
     def test_help_and_default(self):
         result = make("help")

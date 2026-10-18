@@ -36,6 +36,9 @@ preset_obs_debug := full
 ENGINE ?= fastcache
 TIMING ?= $(preset_timing_$(PRESET))
 LOGGING ?= $(preset_logging_$(PRESET))
+RATE_LIMIT ?= 1
+ANTI_SPOOF ?= 1
+CONN_LIMIT ?= 1
 OBSERVABILITY ?= $(preset_obs_$(PRESET))
 
 ENGINES := stateful fastcache dualmap
@@ -52,6 +55,15 @@ endif
 ifneq ($(filter $(LOGGING),0 1),$(LOGGING))
 $(error LOGGING must be 0 or 1)
 endif
+ifneq ($(filter $(RATE_LIMIT),0 1),$(RATE_LIMIT))
+$(error RATE_LIMIT must be 0 or 1)
+endif
+ifneq ($(filter $(ANTI_SPOOF),0 1),$(ANTI_SPOOF))
+$(error ANTI_SPOOF must be 0 or 1)
+endif
+ifneq ($(filter $(CONN_LIMIT),0 1),$(CONN_LIMIT))
+$(error CONN_LIMIT must be 0 or 1)
+endif
 ifeq ($(TIMING):$(OBSERVABILITY),1:none)
 $(error TIMING=1 requires OBSERVABILITY=full or minimal)
 endif
@@ -67,7 +79,7 @@ engine_dualmap := 3
 obs_full := 0
 obs_minimal := 1
 obs_none := 2
-PROFILE := $(ENGINE)-t$(TIMING)-l$(LOGGING)-$(OBSERVABILITY)
+PROFILE := $(ENGINE)-t$(TIMING)-l$(LOGGING)-$(OBSERVABILITY)$(if $(filter 0,$(RATE_LIMIT)),-r0,)$(if $(filter 0,$(ANTI_SPOOF)),-a0,)$(if $(filter 0,$(CONN_LIMIT)),-c0,)
 BUILD_DIR := build/profiles/$(PROFILE)
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/;s/aarch64/arm64/;s/armv[0-9]*/arm/')
 MULTIARCH ?= $(shell gcc -print-multiarch 2>/dev/null)
@@ -75,11 +87,17 @@ ARCH_INC := $(if $(MULTIARCH),-I/usr/include/$(MULTIARCH),)
 RAW_ARCH ?= $(shell uname -m)
 CPPFLAGS += -Iinclude -Isrc/userspace -DFW_ENGINE=$(engine_$(ENGINE)) -DFW_TIMING=$(TIMING) -DFW_LOGGING=$(LOGGING) -DFW_OBSERVABILITY=$(obs_$(OBSERVABILITY))
 CPPFLAGS += -DFW_DEFAULT_BPF_OBJ='"$(BUILD_DIR)/firewall.bpf.o"'
+CPPFLAGS += -DFW_RATE_LIMIT=$(RATE_LIMIT)
+CPPFLAGS += -DFW_ANTI_SPOOF=$(ANTI_SPOOF)
+CPPFLAGS += -DFW_CONN_LIMIT=$(CONN_LIMIT)
 CFLAGS ?= -O2 -g -Wall -Wextra
 BPF_CFLAGS ?= -O2 -g -Wall -target bpf -mcpu=v3 -D__TARGET_ARCH_$(ARCH) -D__$(RAW_ARCH)__ $(ARCH_INC) -Isrc/kernel
 LDLIBS := -lbpf -lelf -lz
 
 USER_SRCS := $(addprefix src/userspace/,main.c core/cli.c core/config.c core/bpf_loader.c core/firewall_ctx.c core/rules_mgr.c core/conntrack_mgr.c core/stats_mgr.c utils/ip_utils.c)
+ifeq ($(ANTI_SPOOF),1)
+USER_SRCS += src/userspace/core/anti_spoof_mgr.c
+endif
 ifeq ($(LOGGING),1)
 USER_SRCS += src/userspace/telemetry/event_bus.c src/userspace/telemetry/network_log.c
 else ifeq ($(OBSERVABILITY),full)
@@ -93,7 +111,7 @@ BPF_OBJ := $(BUILD_DIR)/firewall.bpf.o
 USER_BIN := $(BUILD_DIR)/fw-ctl
 TEST_BIN := $(BUILD_DIR)/ipv6-test
 .DEFAULT_GOAL := all
-.PHONY: all $(PRESETS) help select bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging test-tc-context test-rules-startup print-config FORCE
+.PHONY: all $(PRESETS) help select bpf userspace tools baseline clean test-ipv6 test-ipv6-kernel test-logging test-tc-context test-rules-startup test-rate-limit print-config FORCE
 
 # Changing compiler/flags must invalidate this profile, but an unchanged
 # invocation leaves timestamps alone and performs no compilation.
@@ -131,11 +149,14 @@ help:
 	  'Examples:' \
 	  '  make -j4 logging                       # FastCache + network logs' \
 	  '  make -j4 lean ENGINE=stateful' \
+	  '  make -j4 RATE_LIMIT=0                  # Compile out SYN limiter' \
+	  '  make -j4 ANTI_SPOOF=0                  # Compile out source validation' \
+	  '  make -j4 CONN_LIMIT=0                  # Compile out TCP connection cap' \
 	  '  make -j4 debug ENGINE=dualmap' \
 	  '  make PRESET=logging print-config       # Preview without compiling' \
 	  '  make PRESET=logging clean              # Clean only that profile' \
 	  '' \
-	  'Overrides: TIMING=0|1 LOGGING=0|1 OBSERVABILITY=full|minimal|none' \
+	  'Overrides: TIMING=0|1 LOGGING=0|1 RATE_LIMIT=0|1 ANTI_SPOOF=0|1 CONN_LIMIT=0|1 OBSERVABILITY=full|minimal|none' \
 	  'Logging requires full; timing requires full or minimal.' \
 	  'Outputs: build/profiles/<engine>-t<timing>-l<logging>-<observability>/'
 
@@ -182,6 +203,32 @@ test-tc-context:
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc/kernel test/tc_context_test.c -o $(BUILD_DIR)/tc-context-test
 	./$(BUILD_DIR)/tc-context-test
 
+test-rate-limit:
+ifeq ($(RATE_LIMIT),0)
+	$(error test-rate-limit requires RATE_LIMIT=1)
+endif
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc/kernel test/rate_limit_test.c src/userspace/core/config.c -pthread -o $(BUILD_DIR)/rate-limit-test
+	./$(BUILD_DIR)/rate-limit-test
+
+.PHONY: test-connection-limit test-anti-spoof
+test-connection-limit:
+ifeq ($(CONN_LIMIT),0)
+	$(error test-connection-limit requires CONN_LIMIT=1)
+else
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc/kernel test/connection_limit_test.c src/userspace/core/config.c -pthread -o $(BUILD_DIR)/connection-limit-test
+	./$(BUILD_DIR)/connection-limit-test
+endif
+
+test-anti-spoof:
+ifeq ($(ANTI_SPOOF),0)
+	$(error test-anti-spoof requires ANTI_SPOOF=1)
+endif
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) test/anti_spoof_test.c src/userspace/core/anti_spoof_mgr.c src/userspace/core/config.c $(LDLIBS) -o $(BUILD_DIR)/anti-spoof-test
+	./$(BUILD_DIR)/anti-spoof-test
+
 test-logging:
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) test/network_log_test.c src/userspace/telemetry/network_log.c src/userspace/core/config.c -o $(BUILD_DIR)/network-log-test
@@ -190,7 +237,7 @@ test-logging:
 
 print-config:
 	@echo "preset=$(PRESET) (explicit option overrides take priority)"
-	@echo "engine=$(ENGINE) timing=$(TIMING) logging=$(LOGGING) observability=$(OBSERVABILITY)"
+	@echo "engine=$(ENGINE) timing=$(TIMING) logging=$(LOGGING) rate_limit=$(RATE_LIMIT) anti_spoof=$(ANTI_SPOOF) conn_limit=$(CONN_LIMIT) observability=$(OBSERVABILITY)"
 	@echo "output=$(BUILD_DIR)"
 	@echo "sources=$(USER_SRCS)"
 

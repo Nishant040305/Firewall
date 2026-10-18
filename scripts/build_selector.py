@@ -44,6 +44,19 @@ def main():
         else:
             print("\nTiming requires counters; 'none' is unavailable.")
         obs = choose("Observability", options)
+    rate_limit = choose("SYN rate limiting (build-time)", [
+        ("1", "Include limiter; configure runtime limits in config/firewall.yaml"),
+        ("0", "Compile out limiter entirely: no checks, maps or counters"),
+    ])
+    print(f"Rate limiting: {'included (runtime configurable)' if rate_limit == '1' else 'compiled out (runtime settings ignored)' }.")
+    anti_spoof = choose("Anti-spoofing (build-time)", [
+        ("1", "Include source-prefix checks; disabled until configured"),
+        ("0", "Compile out source-prefix checks entirely"),
+    ])
+    conn_limit = choose("TCP connection limit (build-time)", [
+        ("1", "Include per-source concurrent connection cap"),
+        ("0", "Compile out connection cap entirely"),
+    ])
     default_jobs = os.cpu_count() or 1
     while True:
         answer = input(f"\nParallel build jobs [{default_jobs}]: ").strip()
@@ -55,9 +68,13 @@ def main():
             break
         print("Please enter a positive integer.")
     command = ["make", f"-j{jobs}", "PRESET=default", f"ENGINE={engine}",
-               f"TIMING={timing}", f"LOGGING={logging}", f"OBSERVABILITY={obs}", "all"]
+               f"TIMING={timing}", f"LOGGING={logging}", f"RATE_LIMIT={rate_limit}",
+               f"ANTI_SPOOF={anti_spoof}", f"CONN_LIMIT={conn_limit}", f"OBSERVABILITY={obs}", "all"]
     print(f"\nCommand: {shlex.join(command)}")
-    print(f"Output: build/profiles/{engine}-t{timing}-l{logging}-{obs}/")
+    suffix = "-r0" if rate_limit == "0" else ""
+    suffix += "-a0" if anti_spoof == "0" else ""
+    suffix += "-c0" if conn_limit == "0" else ""
+    print(f"Output: build/profiles/{engine}-t{timing}-l{logging}-{obs}{suffix}/")
     if args.dry_run:
         print("Preview only — nothing compiled or attached.")
         return 0
