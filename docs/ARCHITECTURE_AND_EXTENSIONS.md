@@ -25,6 +25,7 @@ This firewall is built on a modular eBPF/XDP architecture designed to easily acc
 ## 2. Platform Expansion Modules
 
 ### A. Token-Bucket Rate Limiter
+- **Current implementation**: [SYN rate limiting](RATE_LIMITING.md) checks shared per-source and aggregate ingress buckets before state/rules. General packet/byte limiting remains future work; see the documented source-table capacity limitation.
 - **Purpose**: Prevent bandwidth exhaustion and brute force attacks by limiting packets/bytes per second per source IP.
 - **eBPF Map**: `BPF_MAP_TYPE_LRU_HASH` storing tokens and `last_updated_ns` per `src_ip`.
 - **Mechanism**: Refills tokens at a configured rate; packets arriving when tokens are 0 are dropped with `XDP_DROP`.

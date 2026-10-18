@@ -56,7 +56,7 @@ tests, extension-header limits and the map ABI migration requirement.
 13. **Traffic Generation**: `iperf3` throughput, `ping` latency, and `hping3` attack simulations.
 14. **Test Suite**: Automated verification of allowed traffic, blocked ports, state tracking, and unsolicited packet drops.
 15. **Packet Path Validation**: Traced transit across veth pairs, bridges, XDP, and routing FIB.
-16. **Expandable Platform**: Modular foundation for rate limiting, SYN cookies, and machine learning telemetry.
+16. **Expandable Platform**: [Configurable SYN rate limiting](docs/RATE_LIMITING.md), with a modular foundation for SYN cookies and machine learning telemetry.
 
 ---
 
@@ -75,7 +75,19 @@ bash scripts/setup_env.sh
 ### 3. Build eBPF Dataplane & Userspace Utility
 ```bash
 make
+# Exclude SYN rate limiting entirely (no limiter code/maps in the dataplane):
+make -j4 RATE_LIMIT=0
+# Exclude per-interface source validation as well:
+make -j4 RATE_LIMIT=0 ANTI_SPOOF=0
 ```
+
+`RATE_LIMIT=1` is the default. Disabled builds are isolated in
+`build/profiles/<profile>-r0/`; use that directory's matching `fw-ctl`.
+The interactive `make select` also offers this choice.
+
+[Anti-spoofing](docs/ANTI_SPOOFING.md) is included by default but enforcement is
+disabled until your per-interface source-prefix policy is configured. Compile it
+out with `ANTI_SPOOF=0` (`-a0` profile suffix); `make select` offers this too.
 
 ### 4. Start the Stateful Firewall
 ```bash
@@ -229,3 +241,9 @@ To clean up all test containers and virtual network bridges:
 ```bash
 bash scripts/teardown_env.sh
 ```
+## Optional TCP connection cap
+
+`connection_limit` in `config/firewall.yaml` limits concurrent inbound TCP
+connections per source IP. Timeouts remain unchanged. See
+[connection-limit behavior and deployment limits](docs/CONNECTION_LIMITING.md).
+Use `CONN_LIMIT=0` or `make select` to compile it out entirely.

@@ -145,7 +145,7 @@ The kernel fast-path executes a four-stage pipeline:
 
 ### Step 16: Treat this as an expandable platform
 - `docs/ARCHITECTURE_AND_EXTENSIONS.md` details future platform extensions:
-  - Token-bucket per-IP rate limiting.
+  - [SYN token-bucket rate limiting](docs/RATE_LIMITING.md) is implemented; general packet/byte limits remain future work.
   - Stateless SYN Cookies for DDoS protection.
   - Adaptive dynamic blacklisting of repeat offenders.
   - Flow telemetry export for Machine Learning anomaly detection.
