@@ -4,3 +4,4 @@ benchmark_results/
 telemetry/
 telemetry.pre-merge-backup/
 __pycache__/
+docs/BTech_*/
